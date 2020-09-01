@@ -19,6 +19,7 @@
 
 # RStudio files
 .Rproj.user/
+*.Rproj
 
 # produced vignettes
 vignettes/*.html
@@ -30,6 +31,7 @@ vignettes/*.pdf
 # knitr and R markdown default cache directories
 *_cache/
 /cache/
+*.html
 
 # Temporary files created by R markdown
 *.utf8.md
@@ -37,3 +39,17 @@ vignettes/*.pdf
 
 # R Environment Variables
 .Renviron
+
+# Genomics data
+*.vcf
+*.fasta
+*.fa
+*.fna
+*.gff3
+*.gz
+*.bgz
+*.fai
+*.tbi
+
+# Spreadsheets of SNPs and phenotype data
+*.csv
