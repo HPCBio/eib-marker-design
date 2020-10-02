@@ -42,5 +42,7 @@ fork there instead.  Change the directory if you want, then click "Create Projec
 If you are successful, all of the files and directories from this repository will
 be copied to your computer and opened as an RStudio project.
 
+![Screenshot from RStudio](images/clone_git.PNG)
+
 Put your VCF and reference genome FASTA into the `data` directory.  The `results`
 directory is where the output will be after you run the code.
