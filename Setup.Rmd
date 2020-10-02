@@ -1,0 +1,91 @@
+---
+title: "Setup for marker design"
+output:
+  html_document:
+    df_print: paged
+---
+
+This document contains setup steps that you should only have to do once.
+
+## Packages to install
+
+Certain Bioconductor packages must be installed for these tutorials to work.
+They can be installed with the following code.  It is best to run this
+installation code as soon as R is opened, before doing any other work.
+
+```{r eval = FALSE}
+BiocManager::install(c("VariantAnnotation", "Rsamtools"))
+```
+
+If you are asked to update packages, I recommend answering "a" for "all"
+just to make sure everything is up-to-date.
+
+## Data
+
+For convenience, this repository has a `data` folder where you can put
+your VCF, reference FASTA, and any other input files.  You don't have
+to put them here, but if they are somewhere else you will need to
+specify the full path to them.
+
+In this case I have two VCFs for two different projects, but you might just
+have one.
+
+```{r}
+vcf1 <- "data/331_new_data_vcf_IBRC.vcf"
+vcf2 <- "data/unique_173_clones.recode.vcf"
+genfasta <- "data/TDr96_F1_v2_PseudoChromosome.rev07.fasta"
+```
+
+## Building indices
+
+An index is a type of file that enables bioinformatics software to quickly
+find any genomic region of interest within a file.  For example, if you
+needed the sequence from a region of chromosome 5, an index of your reference
+FASTA file will help the software to jump directly to that region, rather
+than having to read all of chromosomes 1 through 4 first.
+
+```{r message = FALSE, warning = FALSE}
+library(VariantAnnotation)
+library(Rsamtools)
+```
+
+First we'll index the reference genome.
+
+```{r eval = FALSE}
+indexFa(genfasta)
+```
+
+You should now have a file called `r paste0(genfasta, ".fai")`.
+If this worked, you'll be able to load the reference genome into R:
+
+```{r}
+refgenome <- FaFile(genfasta)
+seqinfo(refgenome)
+```
+
+Next, we'll index the VCFs.  We will also compress them first into a special
+format for Bioconductor/Samtools.
+
+```{r eval = FALSE}
+bg1 <- bgzip(vcf1)
+bg2 <- bgzip(vcf2)
+indexTabix(bg1, format = "vcf")
+indexTabix(bg2, format = "vcf")
+```
+
+The code below gets those file names back without redoing the compression.
+
+```{r}
+bg1 <- paste0(vcf1, ".bgz")
+bg2 <- paste0(vcf2, ".bgz")
+```
+
+You should see ".bgz" and ".bgz.tbi" files in your data folder now.
+If your compressing and indexing worked, you should be able to preview the VCF
+now.
+
+```{r}
+scanVcfHeader(bg1)
+scanVcfHeader(bg2)
+```
+
