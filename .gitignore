@@ -53,3 +53,7 @@ vignettes/*.pdf
 
 # Spreadsheets of SNPs and phenotype data
 *.csv
+
+# working files
+src/scratch.R
+

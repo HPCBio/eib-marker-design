@@ -5,7 +5,13 @@ output:
     df_print: paged
 ---
 
+```{r include = FALSE}
+options(Biostrings.coloring = FALSE)
+```
+
 This document contains setup steps that you should only have to do once.
+If you haven't already, you'll need to clone this repository to your computer
+and open it as an RStudio project as described in the [README](README.md).
 
 ## Packages to install
 
@@ -47,6 +53,7 @@ than having to read all of chromosomes 1 through 4 first.
 ```{r message = FALSE, warning = FALSE}
 library(VariantAnnotation)
 library(Rsamtools)
+library(dplyr)
 ```
 
 First we'll index the reference genome.
@@ -85,7 +92,97 @@ If your compressing and indexing worked, you should be able to preview the VCF
 now.
 
 ```{r}
-scanVcfHeader(bg1)
-scanVcfHeader(bg2)
+hdr1 <- scanVcfHeader(bg1)
+hdr1
+hdr2 <- scanVcfHeader(bg2)
+hdr2
 ```
 
+## Quality control
+
+There are a few things you might want to check over in your VCF. We'll run through
+a similar set of checks for the two files, but they will differ slightly depending
+on how the files were generated.
+
+### TASSEL
+
+Let's look at the first 50 sample names.  These should match the samples that
+were in your study.
+
+```{r}
+samples(hdr1) %>% head(50)
+```
+
+You can also take a look at the variants themselves.  Here we'll read the
+SNP metadata without reading the genotypes.
+
+```{r}
+vcf1 <- readVcf(bg1, genome = genfasta,
+               param = ScanVcfParam(geno = NA))
+rowRanges(vcf1)
+```
+
+In the `seqnames` column, we see chromosome names that have been shortened
+by TASSEL.  These don't match the names in `seqinfo(refgenome)`, so we'll
+have to keep that in mind.  Here's an example of how to convert them so
+they will work with the reference genome.
+
+```{r}
+ranges1 <- rowRanges(vcf1)
+ranges1a <- GRanges(gsub("^OM", "chrom", seqnames(ranges1)), ranges(ranges1))
+ranges1a
+```
+
+Next, we will use the DNA sequence to make sure that the reference genome
+matches the VCF.  First, we will retrieve the nucleotide at each SNP position
+from the reference genome.
+
+```{r}
+refcheck1 <- scanFa(refgenome, ranges1a)
+refcheck1
+```
+
+Does that match the reference allele in the VCF?
+
+```{r}
+mean(refcheck1 == rowRanges(vcf1)$REF)
+```
+
+It only matches 85% of the time.  However, that is because TASSEL sometimes
+lists the common allele as the reference allele, rather than the allele that
+matches the reference.  So, we'll also check the alternative allele.
+
+```{r}
+mean(rowRanges(vcf1)$REF == refcheck1 | unlist(rowRanges(vcf1)$ALT) == refcheck1)
+```
+
+Now we see a 100% match, so everything looks good.
+
+### Samtools
+
+Let's look at the first 10 sample names.  In this case they contain the full
+path to the BAM file, so we might want to keep that in mind if we need to
+look up genotypes by sample later.
+
+```{r}
+samples(hdr2) %>% head(10)
+```
+
+You can also take a look at the variants themselves.  Here we'll read the
+SNP metadata without reading the genotypes.
+
+```{r}
+vcf2 <- readVcf(bg2, genome = genfasta,
+               param = ScanVcfParam(geno = NA))
+rowRanges(vcf2)
+```
+
+We can see if the reference allele is what we would expect, given the sequence
+from our reference genome.
+
+```{r}
+refcheck2 <- scanFa(refgenome, rowRanges(vcf2))
+mean(rowRanges(vcf2)$REF == refcheck2) # this should return 1
+```
+
+The reference allele matches the reference genome 100% of the time.

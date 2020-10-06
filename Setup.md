@@ -2,6 +2,9 @@ Setup for marker design
 ================
 
 This document contains setup steps that you should only have to do once.
+If you haven’t already, you’ll need to clone this repository to your
+computer and open it as an RStudio project as described in the
+[README](README.md).
 
 ## Packages to install
 
@@ -45,6 +48,7 @@ first.
 ``` r
 library(VariantAnnotation)
 library(Rsamtools)
+library(dplyr)
 ```
 
 First we’ll index the reference genome.
@@ -99,7 +103,8 @@ your compressing and indexing worked, you should be able to preview the
 VCF now.
 
 ``` r
-scanVcfHeader(bg1)
+hdr1 <- scanVcfHeader(bg1)
+hdr1
 ```
 
     ## class: VCFHeader 
@@ -110,7 +115,8 @@ scanVcfHeader(bg1)
     ## geno(5): GT AD DP GQ PL
 
 ``` r
-scanVcfHeader(bg2)
+hdr2 <- scanVcfHeader(bg2)
+hdr2
 ```
 
     ## class: VCFHeader 
@@ -122,3 +128,181 @@ scanVcfHeader(bg2)
     ## fixed(2): FILTER ALT
     ## info(17): INDEL IDV ... DP4 MQ
     ## geno(7): GT PL ... GQ GP
+
+## Quality control
+
+There are a few things you might want to check over in your VCF. We’ll
+run through a similar set of checks for the two files, but they will
+differ slightly depending on how the files were generated.
+
+### TASSEL
+
+Let’s look at the first 50 sample names. These should match the samples
+that were in your study.
+
+``` r
+samples(hdr1) %>% head(50)
+```
+
+    ##  [1] "TDr2946A" "TDr1489A" "TDr2284A" "TDr1499A" "TDr1509A" "TDr1510A" "TDr3782A" "TDr1858C" "TDr1576A" "TDr1585A" "TDr1585C" "TDr1598A" "TDr1622A"
+    ## [14] "TDr1628A" "TDr1631C" "TDr1649A" "TDr1650B" "TDr1653A" "TDr1655A" "TDr1663A" "TDr1686A" "TDr1707A" "TDr1709A" "TDr1711A" "TDr3872A" "TDr1732A"
+    ## [27] "TDr1735A" "TDr2029A" "TDr1760A" "TDr1763C" "TDr1804A" "TDr1775A" "TDr1798A" "TDr1805A" "TDr1807A" "TDr1829A" "TDr1850A" "TDr1899A" "TDr1922C"
+    ## [40] "TDr1935A" "TDr2608A" "TDr2041B" "TDr2121A" "TDr2155A" "TDr2159A" "TDr2161C" "TDr2167A" "TDr2207A" "TDr2210A" "TDr3311B"
+
+You can also take a look at the variants themselves. Here we’ll read the
+SNP metadata without reading the genotypes.
+
+``` r
+vcf1 <- readVcf(bg1, genome = genfasta,
+               param = ScanVcfParam(geno = NA))
+rowRanges(vcf1)
+```
+
+    ## GRanges object with 136429 ranges and 5 metadata columns:
+    ##                     seqnames    ranges strand | paramRangeID            REF                ALT      QUAL      FILTER
+    ##                        <Rle> <IRanges>  <Rle> |     <factor> <DNAStringSet> <DNAStringSetList> <numeric> <character>
+    ##      chrom_01_32840    OM_01     32840      * |           NA              G                  A        NA        PASS
+    ##      chrom_01_45700    OM_01     45700      * |           NA              A                  T        NA        PASS
+    ##      chrom_01_58956    OM_01     58956      * |           NA              T                  C        NA        PASS
+    ##      chrom_01_62865    OM_01     62865      * |           NA              A                  T        NA        PASS
+    ##      chrom_01_65124    OM_01     65124      * |           NA              G                  T        NA        PASS
+    ##                 ...      ...       ...    ... .          ...            ...                ...       ...         ...
+    ##   chrom_20_33017477    OM_20  33017477      * |           NA              A                  G        NA        PASS
+    ##   chrom_20_33017823    OM_20  33017823      * |           NA              C                  T        NA        PASS
+    ##   chrom_20_33017839    OM_20  33017839      * |           NA              T                  C        NA        PASS
+    ##   chrom_20_33017917    OM_20  33017917      * |           NA              T                  C        NA        PASS
+    ##   chrom_20_33018263    OM_20  33018263      * |           NA              A                  G        NA        PASS
+    ##   -------
+    ##   seqinfo: 20 sequences from data/TDr96_F1_v2_PseudoChromosome.rev07.fasta genome; no seqlengths
+
+In the `seqnames` column, we see chromosome names that have been
+shortened by TASSEL. These don’t match the names in
+`seqinfo(refgenome)`, so we’ll have to keep that in mind. Here’s an
+example of how to convert them so they will work with the reference
+genome.
+
+``` r
+ranges1 <- rowRanges(vcf1)
+ranges1a <- GRanges(gsub("^OM", "chrom", seqnames(ranges1)), ranges(ranges1))
+ranges1a
+```
+
+    ## GRanges object with 136429 ranges and 0 metadata columns:
+    ##                     seqnames    ranges strand
+    ##                        <Rle> <IRanges>  <Rle>
+    ##      chrom_01_32840 chrom_01     32840      *
+    ##      chrom_01_45700 chrom_01     45700      *
+    ##      chrom_01_58956 chrom_01     58956      *
+    ##      chrom_01_62865 chrom_01     62865      *
+    ##      chrom_01_65124 chrom_01     65124      *
+    ##                 ...      ...       ...    ...
+    ##   chrom_20_33017477 chrom_20  33017477      *
+    ##   chrom_20_33017823 chrom_20  33017823      *
+    ##   chrom_20_33017839 chrom_20  33017839      *
+    ##   chrom_20_33017917 chrom_20  33017917      *
+    ##   chrom_20_33018263 chrom_20  33018263      *
+    ##   -------
+    ##   seqinfo: 20 sequences from an unspecified genome; no seqlengths
+
+Next, we will use the DNA sequence to make sure that the reference
+genome matches the VCF. First, we will retrieve the nucleotide at each
+SNP position from the reference genome.
+
+``` r
+refcheck1 <- scanFa(refgenome, ranges1a)
+refcheck1
+```
+
+    ## DNAStringSet object of length 136429:
+    ##          width seq                                                                                                                    names               
+    ##      [1]     1 G                                                                                                                      chrom_01
+    ##      [2]     1 T                                                                                                                      chrom_01
+    ##      [3]     1 T                                                                                                                      chrom_01
+    ##      [4]     1 A                                                                                                                      chrom_01
+    ##      [5]     1 T                                                                                                                      chrom_01
+    ##      ...   ... ...
+    ## [136425]     1 A                                                                                                                      chrom_20
+    ## [136426]     1 C                                                                                                                      chrom_20
+    ## [136427]     1 T                                                                                                                      chrom_20
+    ## [136428]     1 T                                                                                                                      chrom_20
+    ## [136429]     1 A                                                                                                                      chrom_20
+
+Does that match the reference allele in the VCF?
+
+``` r
+mean(refcheck1 == rowRanges(vcf1)$REF)
+```
+
+    ## [1] 0.8517471
+
+It only matches 85% of the time. However, that is because TASSEL
+sometimes lists the common allele as the reference allele, rather than
+the allele that matches the reference. So, we’ll also check the
+alternative allele.
+
+``` r
+mean(rowRanges(vcf1)$REF == refcheck1 | unlist(rowRanges(vcf1)$ALT) == refcheck1)
+```
+
+    ## [1] 1
+
+Now we see a 100% match, so everything looks good.
+
+### Samtools
+
+Let’s look at the first 10 sample names. In this case they contain the
+full path to the BAM file, so we might want to keep that in mind if we
+need to look up genotypes by sample later.
+
+``` r
+samples(hdr2) %>% head(10)
+```
+
+    ##  [1] "/home/ibrcuser/work/plant2/2019_Yam/1200.PCflye_ac334_ns167_align/PCrev6_all_bams/DRS_002.all.rd.bam"
+    ##  [2] "/home/ibrcuser/work/plant2/2019_Yam/1200.PCflye_ac334_ns167_align/PCrev6_all_bams/DRS_003.all.rd.bam"
+    ##  [3] "/home/ibrcuser/work/plant2/2019_Yam/1200.PCflye_ac334_ns167_align/PCrev6_all_bams/DRS_004.all.rd.bam"
+    ##  [4] "/home/ibrcuser/work/plant2/2019_Yam/1200.PCflye_ac334_ns167_align/PCrev6_all_bams/DRS_006.all.rd.bam"
+    ##  [5] "/home/ibrcuser/work/plant2/2019_Yam/1200.PCflye_ac334_ns167_align/PCrev6_all_bams/DRS_007.all.rd.bam"
+    ##  [6] "/home/ibrcuser/work/plant2/2019_Yam/1200.PCflye_ac334_ns167_align/PCrev6_all_bams/DRS_009.all.rd.bam"
+    ##  [7] "/home/ibrcuser/work/plant2/2019_Yam/1200.PCflye_ac334_ns167_align/PCrev6_all_bams/DRS_012.all.rd.bam"
+    ##  [8] "/home/ibrcuser/work/plant2/2019_Yam/1200.PCflye_ac334_ns167_align/PCrev6_all_bams/DRS_016.all.rd.bam"
+    ##  [9] "/home/ibrcuser/work/plant2/2019_Yam/1200.PCflye_ac334_ns167_align/PCrev6_all_bams/DRS_018.all.rd.bam"
+    ## [10] "/home/ibrcuser/work/plant2/2019_Yam/1200.PCflye_ac334_ns167_align/PCrev6_all_bams/DRS_022.all.rd.bam"
+
+You can also take a look at the variants themselves. Here we’ll read the
+SNP metadata without reading the genotypes.
+
+``` r
+vcf2 <- readVcf(bg2, genome = genfasta,
+               param = ScanVcfParam(geno = NA))
+rowRanges(vcf2)
+```
+
+    ## GRanges object with 136429 ranges and 5 metadata columns:
+    ##                     seqnames    ranges strand | paramRangeID            REF                ALT      QUAL      FILTER
+    ##                        <Rle> <IRanges>  <Rle> |     <factor> <DNAStringSet> <DNAStringSetList> <numeric> <character>
+    ##      chrom_01_32840 chrom_01     32840      * |           NA              G                  A       999           .
+    ##      chrom_01_45700 chrom_01     45700      * |           NA              T                  A       999           .
+    ##      chrom_01_58956 chrom_01     58956      * |           NA              T                  C       999           .
+    ##      chrom_01_62865 chrom_01     62865      * |           NA              A                  T       999           .
+    ##      chrom_01_65124 chrom_01     65124      * |           NA              T                  G       999           .
+    ##                 ...      ...       ...    ... .          ...            ...                ...       ...         ...
+    ##   chrom_20_33017477 chrom_20  33017477      * |           NA              A                  G       999           .
+    ##   chrom_20_33017823 chrom_20  33017823      * |           NA              C                  T       999           .
+    ##   chrom_20_33017839 chrom_20  33017839      * |           NA              T                  C       999           .
+    ##   chrom_20_33017917 chrom_20  33017917      * |           NA              T                  C       999           .
+    ##   chrom_20_33018263 chrom_20  33018263      * |           NA              A                  G       999           .
+    ##   -------
+    ##   seqinfo: 2253 sequences from data/TDr96_F1_v2_PseudoChromosome.rev07.fasta genome
+
+We can see if the reference allele is what we would expect, given the
+sequence from our reference genome.
+
+``` r
+refcheck2 <- scanFa(refgenome, rowRanges(vcf2))
+mean(rowRanges(vcf2)$REF == refcheck2) # this should return 1
+```
+
+    ## [1] 1
+
+The reference allele matches the reference genome 100% of the time.
