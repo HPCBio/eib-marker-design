@@ -20,5 +20,16 @@ gcContent <- function(vcf, markers, refgenome, flanking_bp = 50){
   rr2 <- getKaspRange(rr, flanking_bp = flanking_bp)
   seq <- Rsamtools::scanFa(refgenome, rr2, as = "DNAStringSet")
   tally <- Biostrings::letterFrequency(seq, c("ATW", "GCS"))
-  return(tally[,2] / rowSums(tally))
+  gc <- tally[,2] / rowSums(tally)
+  names(gc) <- markers
+  return(gc)
+}
+
+nFlankingSNPs <- function(vcf, markers, flanking_bp = 50){
+  rr <- SummarizedExperiment::rowRanges(vcf)
+  rr2 <- getKaspRange(rr[markers], flanking_bp = flanking_bp)
+  fo <- findOverlaps(rr2, rr, type = "any")
+  nhits <- countLnodeHits(fo) - 1
+  names(nhits) <- markers
+  return(nhits)
 }
