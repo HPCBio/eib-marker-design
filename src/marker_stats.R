@@ -28,8 +28,37 @@ gcContent <- function(vcf, markers, refgenome, flanking_bp = 50){
 nFlankingSNPs <- function(vcf, markers, flanking_bp = 50){
   rr <- SummarizedExperiment::rowRanges(vcf)
   rr2 <- getKaspRange(rr[markers], flanking_bp = flanking_bp)
-  fo <- findOverlaps(rr2, rr, type = "any")
-  nhits <- countLnodeHits(fo) - 1
+  fo <- GenomicRanges::findOverlaps(rr2, rr, type = "any")
+  nhits <- S4Vectors::countLnodeHits(fo) - 1
   names(nhits) <- markers
   return(nhits)
+}
+
+MAF <- function(vcf, markers){
+  
+}
+
+LD <- function(){}
+
+# Function to format SNPs for KASP assay, annotating flanking SNPs.
+formatKasp <- function(vcf, markers, refgenome, flanking_bp = 50){
+  rr <- SummarizedExperiment::rowRanges(vcf)
+  rr2 <- getKaspRange(rr[markers], flanking_bp = flanking_bp)
+  seq <- Rsamtools::scanFa(refgenome, rr2, as = "DNAStringSet")
+  fo <- GenomicRanges::findOverlaps(rr2, rr, type = "any")
+  for(i in seq_along(markers)){
+    toshift <- BiocGenerics::start(rr2)[i] - 1
+    theseSNPs <- rr[S4Vectors::subjectHits(fo)[S4Vectors::queryHits(fo) == i]]
+    pos <- BiocGenerics::start(theseSNPs) - toshift
+    ambig <- Biostrings::mergeIUPACLetters(paste0(theseSNPs$REF, unlist(theseSNPs$ALT)))
+    seq[[i]] <- Biostrings::replaceLetterAt(seq[[i]], pos, ambig)
+  }
+  outstrings <- paste0(XVector::subseq(seq, start = 1, width = flanking_bp),
+                       "[",
+                       XVector::subseq(seq, start = flanking_bp + 1, width = 1),
+                       "]",
+                       XVector::subseq(seq, start = flanking_bp + 2, width = flanking_bp))
+  return(data.frame(SNP_ID = markers,
+                    Sequence = outstrings,
+                    stringsAsFactors = FALSE))
 }
