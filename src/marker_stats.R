@@ -76,8 +76,9 @@ formatKasp <- function(vcf, markers, refgenome, flanking_bp = 50,
   rr2 <- getKaspRange(rr[markers], flanking_bp = flanking_bp)
   seq <- Rsamtools::scanFa(refgenome, rr2, as = "DNAStringSet")
   fo <- GenomicRanges::findOverlaps(rr2, rr, type = "any")
+  kaspstart <- BiocGenerics::start(rr2)
   for(i in seq_along(markers)){
-    toshift <- BiocGenerics::start(rr2)[i] - 1
+    toshift <- kaspstart[i] - 1
     theseSNPs <- rr[S4Vectors::subjectHits(fo)[S4Vectors::queryHits(fo) == i]]
     pos <- BiocGenerics::start(theseSNPs) - toshift
     ambig <- Biostrings::mergeIUPACLetters(paste0(theseSNPs$REF, unlist(theseSNPs$ALT)))
