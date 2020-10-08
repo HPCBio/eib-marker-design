@@ -7,6 +7,11 @@
 # SNP should be considered.
 # rr is a GRanges object indicating SNP locations.
 
+# Packages are specified for Bioconductor functions here just to make everything
+# a little more robust to the user having loaded other packages.
+
+# Function to get a GRanges object representing the flanking regions for a set
+# of SNPs, given a GRanges object representing the SNPs.
 getKaspRange <- function(rr, flanking_bp = 50){
   if(!all(BiocGenerics::width(rr) == 1)){
     stop("Ranges are too wide to be SNPs.")
@@ -15,8 +20,31 @@ getKaspRange <- function(rr, flanking_bp = 50){
                                   downstream = flanking_bp + 1))
 }
 
-gcContent <- function(vcf, markers, refgenome, flanking_bp = 50){
+# Function to correct the chromosome names from a TASSEL VCF to match the
+# reference genome.  x is a character vector, and a character vector of the same
+# length is returned.
+# !! You can modify this function if chromosome names need to be modified in
+# some different way.  Alternatively, you can build a similar function to pass
+# to the fixfn argument of the below functions.
+fixTasselNames <- function(x){
+  gsub("^OM", "chrom", x)
+}
+
+# Function to get a GRanges object from a VCF, but with the names corrected.
+rowRanges_correctedSeqnames <- function(vcf, markers = rownames(vcf),
+                                        fixfn = fixTasselNames){
   rr <- SummarizedExperiment::rowRanges(vcf)[markers]
+  rr1 <- GenomicRanges::GRanges(fixfn(GenomeInfoDb::seqnames(rr)),
+                                IRanges::ranges(rr))
+  S4Vectors::mcols(rr1) <- S4Vectors::mcols(rr)
+  return(rr1)
+}
+
+# Function to get the proportion GC content for the flanking regions for a set
+# of SNPs.
+gcContent <- function(vcf, markers, refgenome, flanking_bp = 50,
+                      fixfn = fixTasselNames){
+  rr <- rowRanges_correctedSeqnames(vcf, markers, fixfn)
   rr2 <- getKaspRange(rr, flanking_bp = flanking_bp)
   seq <- Rsamtools::scanFa(refgenome, rr2, as = "DNAStringSet")
   tally <- Biostrings::letterFrequency(seq, c("ATW", "GCS"))
@@ -25,6 +53,7 @@ gcContent <- function(vcf, markers, refgenome, flanking_bp = 50){
   return(gc)
 }
 
+# Function to count the number of SNPs in the flanking region for each SNP.
 nFlankingSNPs <- function(vcf, markers, flanking_bp = 50){
   rr <- SummarizedExperiment::rowRanges(vcf)
   rr2 <- getKaspRange(rr[markers], flanking_bp = flanking_bp)
@@ -34,15 +63,16 @@ nFlankingSNPs <- function(vcf, markers, flanking_bp = 50){
   return(nhits)
 }
 
-MAF <- function(vcf, markers){
-  
-}
-
-LD <- function(){}
+# MAF <- function(vcf, markers){
+#   
+# }
+# 
+# LD <- function(){}
 
 # Function to format SNPs for KASP assay, annotating flanking SNPs.
-formatKasp <- function(vcf, markers, refgenome, flanking_bp = 50){
-  rr <- SummarizedExperiment::rowRanges(vcf)
+formatKasp <- function(vcf, markers, refgenome, flanking_bp = 50,
+                       fixfn = fixTasselNames){
+  rr <- rowRanges_correctedSeqnames(vcf, markers = rownames(vcf), fixfn = fixfn)
   rr2 <- getKaspRange(rr[markers], flanking_bp = flanking_bp)
   seq <- Rsamtools::scanFa(refgenome, rr2, as = "DNAStringSet")
   fo <- GenomicRanges::findOverlaps(rr2, rr, type = "any")

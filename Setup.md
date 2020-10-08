@@ -177,30 +177,32 @@ rowRanges(vcf1)
 
 In the `seqnames` column, we see chromosome names that have been
 shortened by TASSEL. These don’t match the names in
-`seqinfo(refgenome)`, so we’ll have to keep that in mind. Here’s an
-example of how to convert them so they will work with the reference
-genome.
+`seqinfo(refgenome)`, so we’ll have to keep that in mind. There are
+functions in the `src` directory to help with name conversion. If your
+VCF is different and you need to do some conversion other than “OM” to
+“chrom”, you might modify the `fixTasselNames` function.
 
 ``` r
-ranges1 <- rowRanges(vcf1)
-ranges1a <- GRanges(gsub("^OM", "chrom", seqnames(ranges1)), ranges(ranges1))
+source("src/marker_stats.R")
+
+ranges1a <- rowRanges_correctedSeqnames(vcf1)
 ranges1a
 ```
 
-    ## GRanges object with 136429 ranges and 0 metadata columns:
-    ##                     seqnames    ranges strand
-    ##                        <Rle> <IRanges>  <Rle>
-    ##      chrom_01_32840 chrom_01     32840      *
-    ##      chrom_01_45700 chrom_01     45700      *
-    ##      chrom_01_58956 chrom_01     58956      *
-    ##      chrom_01_62865 chrom_01     62865      *
-    ##      chrom_01_65124 chrom_01     65124      *
-    ##                 ...      ...       ...    ...
-    ##   chrom_20_33017477 chrom_20  33017477      *
-    ##   chrom_20_33017823 chrom_20  33017823      *
-    ##   chrom_20_33017839 chrom_20  33017839      *
-    ##   chrom_20_33017917 chrom_20  33017917      *
-    ##   chrom_20_33018263 chrom_20  33018263      *
+    ## GRanges object with 136429 ranges and 5 metadata columns:
+    ##                     seqnames    ranges strand | paramRangeID            REF                ALT      QUAL      FILTER
+    ##                        <Rle> <IRanges>  <Rle> |     <factor> <DNAStringSet> <DNAStringSetList> <numeric> <character>
+    ##      chrom_01_32840 chrom_01     32840      * |           NA              G                  A        NA        PASS
+    ##      chrom_01_45700 chrom_01     45700      * |           NA              A                  T        NA        PASS
+    ##      chrom_01_58956 chrom_01     58956      * |           NA              T                  C        NA        PASS
+    ##      chrom_01_62865 chrom_01     62865      * |           NA              A                  T        NA        PASS
+    ##      chrom_01_65124 chrom_01     65124      * |           NA              G                  T        NA        PASS
+    ##                 ...      ...       ...    ... .          ...            ...                ...       ...         ...
+    ##   chrom_20_33017477 chrom_20  33017477      * |           NA              A                  G        NA        PASS
+    ##   chrom_20_33017823 chrom_20  33017823      * |           NA              C                  T        NA        PASS
+    ##   chrom_20_33017839 chrom_20  33017839      * |           NA              T                  C        NA        PASS
+    ##   chrom_20_33017917 chrom_20  33017917      * |           NA              T                  C        NA        PASS
+    ##   chrom_20_33018263 chrom_20  33018263      * |           NA              A                  G        NA        PASS
     ##   -------
     ##   seqinfo: 20 sequences from an unspecified genome; no seqlengths
 

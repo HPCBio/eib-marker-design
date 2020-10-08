@@ -124,12 +124,15 @@ rowRanges(vcf1)
 
 In the `seqnames` column, we see chromosome names that have been shortened
 by TASSEL.  These don't match the names in `seqinfo(refgenome)`, so we'll
-have to keep that in mind.  Here's an example of how to convert them so
-they will work with the reference genome.
+have to keep that in mind.  There are functions in the `src` directory to help
+with name conversion.  If your VCF is different and you need to do some
+conversion other than "OM" to "chrom", you might modify the `fixTasselNames`
+function.
 
 ```{r}
-ranges1 <- rowRanges(vcf1)
-ranges1a <- GRanges(gsub("^OM", "chrom", seqnames(ranges1)), ranges(ranges1))
+source("src/marker_stats.R")
+
+ranges1a <- rowRanges_correctedSeqnames(vcf1)
 ranges1a
 ```
 
