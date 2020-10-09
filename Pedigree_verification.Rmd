@@ -1,0 +1,84 @@
+---
+title: "Selecting markers for pedigree verification"
+author: Lindsay Clark, HPCBio, Roy J. Carver Biotechnology Center, University of Illinois,
+  Urbana-Champaign
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+In this workflow, we'll identify markers useful for identifying accessions and
+verifying pedigrees, and export those markers for KASP marker design.
+
+## Setup
+
+Be sure you have completed the [setup](Setup.md) steps before working through
+this pipeline.  First we'll load all the needed packages and functions.
+
+```{r libs, message = FALSE, warning = FALSE}
+library(VariantAnnotation)
+library(Rsamtools)
+library(adegenet)
+library(ggplot2)
+source("src/marker_stats.R")
+source("src/getNumGeno.R")
+```
+
+Next we'll point to our VCF and reference genome files. Edit these lines to
+point to your dataset.
+
+```{r files}
+bg <- "data/331_new_data_vcf_IBRC.vcf.bgz"
+refgenome <- FaFile("data/TDr96_F1_v2_PseudoChromosome.rev07.fasta")
+```
+
+## Population statistics
+
+We'll import all the genotypes in numeric format, indicating number of copies
+of the alternative allele.
+
+```{r numeric_gen}
+numgen <- getNumGeno(bg)
+numgen[1:10,1:10]
+```
+
+Let's look at the distribution of allele frequencies in this dataset.
+
+```{r alfreq}
+alfreq <- rowMeans(numgen, na.rm = TRUE) / 2
+hist(alfreq, xlab = "Allele frequency", main = "Histogram of alternative allele frequency")
+```
+
+We can look at the relationship between observed and expected heterozygosity
+( _Ho_ and _He_, respectively).
+
+```{r hohe}
+He <- 1 - (alfreq ^ 2) - ((1 - alfreq) ^ 2)
+Ho <- rowMeans(numgen == 1, na.rm = TRUE)
+hist(Ho / He)
+```
+
+In this case the mode is a little above 1, suggesting the presence of hybrid
+lines and/or polyploids in the dataset.  The bump at 2 indicates likely paralogs.
+In this case we'll set a cutoff at 1.5.
+
+```{r hohe_vs_alfreq}
+hohe_cutoff <- 1.5
+
+ggplot(mapping = aes(x = alfreq, y = Ho/He)) +
+  geom_point(alpha = 0.05) +
+  geom_hline(yintercept = hohe_cutoff, color = "blue") +
+  labs(x = "Allele frequency") +
+  ggtitle("Filtering for putative paralogs")
+```
+
+```{r}
+hetByInd <- colMeans(numgen == 1, na.rm = TRUE)
+hist(hetByInd)
+```
+
+## Genetic groups
+
+Do DAPC
