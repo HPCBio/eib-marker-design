@@ -1,5 +1,7 @@
 Setup for marker design
 ================
+Lindsay Clark, HPCBio, Roy J. Carver Biotechnology Center, University of
+Illinois, Urbana-Champaign
 
 This document contains setup steps that you should only have to do once.
 If you haven’t already, you’ll need to clone this repository to your
@@ -8,12 +10,13 @@ computer and open it as an RStudio project as described in the
 
 ## Packages to install
 
-Certain Bioconductor packages must be installed for these tutorials to
-work. They can be installed with the following code. It is best to run
-this installation code as soon as R is opened, before doing any other
-work.
+Certain Bioconductor and CRAN packages must be installed for these
+tutorials to work. They can be installed with the following code. It is
+best to run this installation code as soon as R is opened, before doing
+any other work.
 
 ``` r
+install.packages("tidyverse")
 BiocManager::install(c("VariantAnnotation", "Rsamtools"))
 ```
 

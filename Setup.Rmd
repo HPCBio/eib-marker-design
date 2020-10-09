@@ -1,5 +1,7 @@
 ---
 title: "Setup for marker design"
+author: Lindsay Clark, HPCBio, Roy J. Carver Biotechnology Center, University of Illinois,
+  Urbana-Champaign
 output:
   html_document:
     df_print: paged
@@ -15,11 +17,12 @@ and open it as an RStudio project as described in the [README](README.md).
 
 ## Packages to install
 
-Certain Bioconductor packages must be installed for these tutorials to work.
+Certain Bioconductor and CRAN packages must be installed for these tutorials to work.
 They can be installed with the following code.  It is best to run this
 installation code as soon as R is opened, before doing any other work.
 
 ```{r eval = FALSE}
+install.packages("tidyverse")
 BiocManager::install(c("VariantAnnotation", "Rsamtools"))
 ```
 
