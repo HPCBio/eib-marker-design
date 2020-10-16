@@ -74,11 +74,89 @@ ggplot(mapping = aes(x = alfreq, y = Ho/He)) +
   ggtitle("Filtering for putative paralogs")
 ```
 
+We can see what proportion of markers we would lose at this cutoff,  It's about 11%.
+
+```{r}
+mean(Ho/He > hohe_cutoff)
+```
+
+We'll do that filtering now, then start a data frame to track statistics about each SNP.
+
+```{r}
+keep1 <- which(Ho/He < hohe_cutoff)
+
+numgen <- numgen[keep1,]
+snpdf <- data.frame(row.names = rownames(numgen),
+                    AlFreq = alfreq[keep1],
+                    Ho = Ho[keep1],
+                    He = He[keep1])
+```
+
+In this case there are no missing data, but I am going to add that calculation
+in for the sake of reusing the workflow.
+
+```{r}
+snpdf$MissingRate <- rowMeans(is.na(numgen))
+summary(snpdf)
+```
+
+We can also look at the heterozygosity across individuals.  The two outlier
+individuals we see below are likely to be polyploids or inter-species hybrids.
+We'll filter them out.
+
 ```{r}
 hetByInd <- colMeans(numgen == 1, na.rm = TRUE)
 hist(hetByInd)
+
+numgen <- numgen[, hetByInd < 0.5]
 ```
 
 ## Genetic groups
 
-Do DAPC
+We could simply choose markers with high allele frequency at this point, but
+instead I am going to identify genetic groups first.  That way, I can test the
+allele frequency within each genetic group.  We generally want a variety of
+markers so that we have some that are variable within each group, and some
+that can distiguish groups.  We'll use the Discriminant Analysis of Principal
+Components (DAPC) protocol implemented in the `adegenet` package.  In order
+to knit this document I have to set `n.pca`, `n.clust`, and `n.da` manually, but for
+your work I recommend a first pass where they are left as `NULL` so that you
+can chose them based on where the graphs plateau.
+
+```{r}
+myclust <- find.clusters(t(numgen), n.pca = 100, n.clust = 10)
+```
+
+Check the size of the groups.  If it is very uneven, you may want fewer groups.
+
+```{r}
+myclust$size
+```
+
+Now perform DAPC.
+
+```{r}
+mydapc <- dapc(t(numgen), grp = myclust$grp, scale = TRUE, n.pca = 50, n.da = 2)
+```
+
+```{r}
+scatter(mydapc, posi.da = "bottomleft")
+```
+
+Group assignments are in `mydapc$assign`.  You many want to inspect some of the
+more differentiated groups to see if they are biologically meaningful.
+
+```{r}
+colnames(numgen)[mydapc$assign == 1]
+colnames(numgen)[mydapc$assign == 4]
+```
+
+Now we can get allele frequencies within each genetic group.
+
+```{r}
+grp_alfreq <- sapply(levels(mydapc$assign),
+                     function(x) rowMeans(numgen[, mydapc$assign == x], na.rm = TRUE) / 2)
+colnames(grp_alfreq) <- paste0("AlFreq_Grp", colnames(grp_alfreq))
+head(grp_alfreq)
+```
+
