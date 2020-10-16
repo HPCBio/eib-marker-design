@@ -24,6 +24,7 @@ library(adegenet)
 library(ggplot2)
 source("src/marker_stats.R")
 source("src/getNumGeno.R")
+source("src/evaluate_marker_sets.R")
 ```
 
 Next we'll point to our VCF and reference genome files. Edit these lines to
@@ -55,7 +56,7 @@ We can look at the relationship between observed and expected heterozygosity
 ( _Ho_ and _He_, respectively).
 
 ```{r hohe}
-He <- 1 - (alfreq ^ 2) - ((1 - alfreq) ^ 2)
+He <- Expected_het(alfreq)
 Ho <- rowMeans(numgen == 1, na.rm = TRUE)
 hist(Ho / He)
 ```
