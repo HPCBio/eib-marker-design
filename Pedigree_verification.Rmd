@@ -124,6 +124,10 @@ to knit this document I have to set `n.pca`, `n.clust`, and `n.da` manually, but
 your work I recommend a first pass where they are left as `NULL` so that you
 can chose them based on where the graphs plateau.
 
+```{r echo = FALSE}
+set.seed(1016) # to ensure report reproducibility
+```
+
 ```{r}
 myclust <- find.clusters(t(numgen), n.pca = 100, n.clust = 10)
 ```
@@ -141,14 +145,14 @@ mydapc <- dapc(t(numgen), grp = myclust$grp, scale = TRUE, n.pca = 50, n.da = 2)
 ```
 
 ```{r}
-scatter(mydapc, posi.da = "bottomleft")
+scatter(mydapc, posi.da = "topright")
 ```
 
 Group assignments are in `mydapc$assign`.  You many want to inspect some of the
 more differentiated groups to see if they are biologically meaningful.
 
 ```{r}
-colnames(numgen)[mydapc$assign == 1]
+colnames(numgen)[mydapc$assign == 9]
 colnames(numgen)[mydapc$assign == 4]
 ```
 

@@ -63,9 +63,6 @@ nFlankingSNPs <- function(vcf, markers, flanking_bp = 50){
   return(nhits)
 }
 
-# MAF <- function(vcf, markers){
-#   
-# }
 # 
 # LD <- function(){}
 
