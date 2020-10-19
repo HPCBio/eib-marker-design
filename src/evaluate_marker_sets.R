@@ -35,3 +35,57 @@ DiffScore <- function(freqmat){
   score <- exp(mean(log(colMeans(dmat, na.rm = TRUE))))
   return(score)
 }
+
+# Geometric mean of expected heterozygosity across populations
+DivScore <- function(freqmat){
+  hmat <- Expected_het(freqmat)
+  score <- exp(mean(log(colMeans(hmat, na.rm = TRUE))))
+  return(score)
+}
+
+# Simulated annealing algorithm to find an ideal marker set
+findMarkerSet <- function(freqmat, nSNP = 20,
+                          within_pop_weight = 1, between_pop_weight = 1,
+                          T0 = 0.5, reps = 100,
+                          maxrounds = 100){
+  totSNP <- nrow(freqmat)
+  thisset <- sample(totSNP, nSNP)
+  thisscore <- DiffScore(freqmat[thisset,]) ^ between_pop_weight *
+    DivScore(freqmat[thisset,]) ^ within_pop_weight
+  bestset <- thisset
+  bestscore <- thisscore
+  Temp <- T0
+  temps_used <- numeric(maxrounds)
+  scores_by_round <- numeric(maxrounds)
+  step <- T0 / maxrounds
+  
+  for(i in seq_len(maxrounds)){
+    message(paste("Simulated annealing round", i))
+    switched <- FALSE
+    for(j in seq_len(reps)){
+      newset <- sample(thisset, nSNP - 1)
+      newset <- c(newset,
+                  sample(seq_len(totSNP)[-newset], 1))
+      newscore <- DiffScore(freqmat[newset,]) ^ between_pop_weight *
+        DivScore(freqmat[newset,]) ^ within_pop_weight
+      if(newscore > thisscore ||
+         runif(1) < Temp - (thisscore - newscore)){
+        thisset <- newset
+        thisscore <- newscore
+        switched <- TRUE
+        if(thisscore > bestscore){
+          bestset <- thisset
+          bestscore <- thisscore
+        }
+      }
+    }
+    temps_used[i] <- Temp
+    scores_by_round[i] <- bestscore
+    Temp <- Temp - step
+    if(!switched) break
+  }
+  
+  return(list(Set = rownames(freqmat)[bestset],
+              Temperatures = temps_used[1:i],
+              Scores = scores_by_round[1:i]))
+}
