@@ -14,6 +14,7 @@ getNumGeno <- function(file){
 # Function to make a distance matrix for identifying clones.
 # Downsample SNPs to speed up processing.
 interIndividualDist <- function(numgen, minMAF = 0.05, nsnp = 1e4, ploidy = 2){
+  if(nsnp > nrow(numgen)) nsnp <- nrow(numgen)
   freq <- rowMeans(numgen, na.rm = TRUE) / ploidy
   numgen <- numgen[freq >= minMAF,]
   randsnp <- sample(nrow(numgen), nsnp)
