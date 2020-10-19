@@ -6,7 +6,7 @@ output: html_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE, cache = TRUE)
 ```
 
 In this workflow, we'll identify markers useful for identifying accessions and
@@ -22,6 +22,7 @@ library(VariantAnnotation)
 library(Rsamtools)
 library(adegenet)
 library(ggplot2)
+library(ape)
 source("src/marker_stats.R")
 source("src/getNumGeno.R")
 source("src/evaluate_marker_sets.R")
@@ -44,6 +45,36 @@ of the alternative allele.
 numgen <- getNumGeno(bg)
 numgen[1:10,1:10]
 ```
+
+### Check for clonal duplicates
+
+It is good to check that there aren't any clonal duplicates in the dataset, as
+these could bias downstream analysis.  We'll calculate inter-individual distances
+and look at the distribution of those distances.
+
+```{r echo = FALSE}
+set.seed(1019) # to make report reproducible
+```
+
+```{r inddist}
+mydist <- interIndividualDist(numgen)
+
+hist(mydist, xlab = "Euclidian distance", main = "Histogram of inter-individual distances")
+```
+
+```{r njtree, fig.height = 6, fig.width = 6}
+plot(nj(mydist), type = "unrooted", show.tip.label = FALSE)
+```
+
+Here it looks like the most closely related individuals are family members, not
+clones.  If there were some values closer to zero, however, clones could be
+removed using the `removeClones` function.
+
+```{r removeclones}
+numgen <- removeClones(numgen, mydist)
+```
+
+### Observed and expected heterozygosity
 
 Let's look at the distribution of allele frequencies in this dataset.
 
