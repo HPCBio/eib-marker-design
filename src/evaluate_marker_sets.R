@@ -45,29 +45,62 @@ DivScore <- function(freqmat){
 
 # Simulated annealing algorithm to find an ideal marker set
 findMarkerSet <- function(freqmat, nSNP = 20,
-                          within_pop_weight = 1, between_pop_weight = 1,
-                          T0 = 0.5, reps = 100,
-                          maxrounds = 100){
+                          within_pop_weight = 1, between_pop_weight = 0.5,
+                          T0 = 0.2, reps = 500, rho = 0.95,
+                          maxrounds = 100,
+                          min_dist_bp = 1e5){
+  # setup
   totSNP <- nrow(freqmat)
-  thisset <- sample(totSNP, nSNP)
-  thisscore <- DiffScore(freqmat[thisset,]) ^ between_pop_weight *
-    DivScore(freqmat[thisset,]) ^ within_pop_weight
-  bestset <- thisset
-  bestscore <- thisscore
   Temp <- T0
   temps_used <- numeric(maxrounds)
   scores_by_round <- numeric(maxrounds)
-  step <- T0 / maxrounds
   
+  # function to generate a score for a set of SNPs
+  scorefn <- function(snps){
+    num <- log(DiffScore(freqmat[snps,])) * between_pop_weight +
+      log(DivScore(freqmat[snps,])) * within_pop_weight
+    den <- between_pop_weight + within_pop_weight
+    return(exp(num / den))
+  }
+  
+  # function to determine if a SNP is too physically close to any already in the set
+  chromosomes <- sub("_[[:digit:]]+$", "", rownames(freqmat))
+  positions <- as.integer(sub("^.+_", "", rownames(freqmat)))
+  
+  snp_pos_ok <- function(snp, set){
+    samechr <- set[chromosomes[set] == chromosomes[snp]]
+    return(all(abs(positions[samechr] - positions[snp]) >= min_dist_bp))
+  }
+  
+  # initial set of SNPs
+  thisset <- integer(nSNP)
+  for(s in seq_len(nSNP)){
+    snp <- sample(totSNP, 1)
+    while(!snp_pos_ok(snp, thisset[seq_len(s - 1)])){
+      snp <- sample(totSNP, 1)
+    }
+    thisset[s] <- snp
+  }
+  thisscore <- scorefn(thisset)
+  bestset <- thisset
+  bestscore <- thisscore
+  
+  # simulated annealing
   for(i in seq_len(maxrounds)){
     message(paste("Simulated annealing round", i))
     switched <- FALSE
     for(j in seq_len(reps)){
+      # remove one SNP
       newset <- sample(thisset, nSNP - 1)
-      newset <- c(newset,
-                  sample(seq_len(totSNP)[-newset], 1))
-      newscore <- DiffScore(freqmat[newset,]) ^ between_pop_weight *
-        DivScore(freqmat[newset,]) ^ within_pop_weight
+      # find a new SNP and confirm it is not too close to any in the set
+      repeat{
+        newsnp <- sample(seq_len(totSNP)[-newset], 1)
+        if(snp_pos_ok(newsnp, newset)) break
+      }
+      newset <- c(newset, newsnp)
+      # score the set of SNPs by diversity and differentiation
+      newscore <- scorefn(newset)
+      # determine whether to move to this new solution
       if(newscore > thisscore ||
          runif(1) < Temp - (thisscore - newscore)){
         thisset <- newset
@@ -81,7 +114,7 @@ findMarkerSet <- function(freqmat, nSNP = 20,
     }
     temps_used[i] <- Temp
     scores_by_round[i] <- bestscore
-    Temp <- Temp - step
+    Temp <- Temp * rho
     if(!switched) break
   }
   
