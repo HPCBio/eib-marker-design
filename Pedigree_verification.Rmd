@@ -108,13 +108,13 @@ ggplot(mapping = aes(x = alfreq, y = Ho/He)) +
 
 We can see what proportion of markers we would lose at this cutoff,  It's about 11%.
 
-```{r}
+```{r mean_hohe}
 mean(Ho/He > hohe_cutoff)
 ```
 
 We'll do that filtering now, then start a data frame to track statistics about each SNP.
 
-```{r}
+```{r filter_hohe}
 keep1 <- which(Ho/He < hohe_cutoff)
 
 numgen <- numgen[keep1,]
@@ -127,7 +127,7 @@ snpdf <- data.frame(row.names = rownames(numgen),
 In this case there are no missing data, but I am going to add that calculation
 in for the sake of reusing the workflow.
 
-```{r}
+```{r missrate}
 snpdf$MissingRate <- rowMeans(is.na(numgen))
 summary(snpdf)
 ```
@@ -136,7 +136,7 @@ We can also look at the heterozygosity across individuals.  The two outlier
 individuals we see below are likely to be polyploids or inter-species hybrids.
 We'll filter them out.
 
-```{r}
+```{r filter_ind}
 hetByInd <- colMeans(numgen == 1, na.rm = TRUE)
 hist(hetByInd)
 
@@ -159,37 +159,37 @@ can chose them based on where the graphs plateau.
 set.seed(1016) # to ensure report reproducibility
 ```
 
-```{r}
+```{r findclusters}
 myclust <- find.clusters(t(numgen), n.pca = 100, n.clust = 10)
 ```
 
 Check the size of the groups.  If it is very uneven, you may want fewer groups.
 
-```{r}
+```{r clustsize}
 myclust$size
 ```
 
 Now perform DAPC.
 
-```{r}
+```{r dapc}
 mydapc <- dapc(t(numgen), grp = myclust$grp, scale = TRUE, n.pca = 50, n.da = 2)
 ```
 
-```{r}
+```{r dapcscatter}
 scatter(mydapc, posi.da = "topright")
 ```
 
 Group assignments are in `mydapc$assign`.  You many want to inspect some of the
 more differentiated groups to see if they are biologically meaningful.
 
-```{r}
+```{r checkgroups}
 colnames(numgen)[mydapc$assign == 9]
 colnames(numgen)[mydapc$assign == 4]
 ```
 
 Now we can get allele frequencies within each genetic group.
 
-```{r}
+```{r freq_by_group}
 grp_alfreq <- sapply(levels(mydapc$assign),
                      function(x) rowMeans(numgen[, mydapc$assign == x], na.rm = TRUE) / 2)
 colnames(grp_alfreq) <- paste0("AlFreq_Grp", colnames(grp_alfreq))
