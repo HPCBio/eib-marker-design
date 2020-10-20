@@ -107,7 +107,7 @@ ggplot(mapping = aes(x = alfreq, y = Ho/He)) +
   ggtitle("Filtering for putative paralogs")
 ```
 
-We can see what proportion of markers we would lose at this cutoff,  It's about 11%.
+We can see what proportion of markers we would lose at this cutoff.  It's about 11%.
 
 ```{r mean_hohe}
 mean(Ho/He > hohe_cutoff)
@@ -248,7 +248,7 @@ There seem to be plenty with no flanking SNPs, so we will just keep those.
 snpdf3 <- filter(snpdf2, Nflanking == 0)
 ```
 
-### Choosing a set of markers
+## Choosing a set of markers
 
 Since we are selecting a small set of markers, we want to not only make sure
 that each individual marker has a high minor allele frequency to maximize its
@@ -259,6 +259,10 @@ a function to use a
 [simulated annealing algorithm](https://en.wikipedia.org/wiki/Simulated_annealing)
 to find optimal sets of markers that capture diversity within and between
 genetic groups.
+
+```{r}
+set.seed(1020) # for report reproducibility
+```
 
 ```{r choosemarkers, message = FALSE}
 markerset <- findMarkerSet(grp_alfreq[rownames(snpdf3),], nSNP = 50)
@@ -280,7 +284,7 @@ mean(dist2 == 0)
 If two individuals were selected at random, there is a 0.2% chance that they
 would have identical genotypes across all markers.
 
-### Exporting markers
+## Exporting markers
 
 Now we can get the flanking sequences for the markers that we selected.
 
