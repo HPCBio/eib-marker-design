@@ -9,6 +9,7 @@ Expected_het <- function(freq){
 }
 
 # Get Jost's D from a matrix of allele frequencies.
+# Global Jost's D is calculated.  To get pairwise Jost's D, do two columns at a time.
 JostD <- function(freqmat){
   meanfreq <- rowMeans(freqmat, na.rm = TRUE)
   Ht <- Expected_het(meanfreq)
@@ -43,7 +44,20 @@ DivScore <- function(freqmat){
   return(score)
 }
 
-# Simulated annealing algorithm to find an ideal marker set
+# Simulated annealing algorithm to find an ideal marker set.
+# nSNP: The number of SNPs to have in the set.
+# within_pop_weight and between_pop_weight indicate how important it is to have
+# variation within and between populations, respectively.
+# T0: Starting temperature.  The higher this is, the more the algorithm will
+# randomly explore the solution space.
+# reps: Number of sets to test at each temperature.  More reps means a longer
+# computational time but more thorough exploration of solutions.
+# rho: The factor by which temperature decreases with each round.  The higher
+# this is, the more the algorithm will randomly explore the solution space.
+# maxrounds: The maximum number of rounds of simulated annealing to perform
+# before stopping.  The algorithm will also stop if no new solutions are found
+# within a round.
+# min_dist_bp: The minimum distance, in basepairs, between markers in the set.
 findMarkerSet <- function(freqmat, nSNP = 20,
                           within_pop_weight = 1, between_pop_weight = 0.5,
                           T0 = 0.2, reps = 500, rho = 0.95,
