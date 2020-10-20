@@ -16,7 +16,7 @@ best to run this installation code as soon as R is opened, before doing
 any other work.
 
 ``` r
-install.packages("tidyverse")
+install.packages(c("tidyverse", "ape", "adegenet"))
 BiocManager::install(c("VariantAnnotation", "Rsamtools"))
 ```
 
@@ -147,10 +147,10 @@ that were in your study.
 samples(hdr1) %>% head(50)
 ```
 
-    ##  [1] "TDr2946A" "TDr1489A" "TDr2284A" "TDr1499A" "TDr1509A" "TDr1510A" "TDr3782A" "TDr1858C" "TDr1576A" "TDr1585A" "TDr1585C" "TDr1598A" "TDr1622A"
-    ## [14] "TDr1628A" "TDr1631C" "TDr1649A" "TDr1650B" "TDr1653A" "TDr1655A" "TDr1663A" "TDr1686A" "TDr1707A" "TDr1709A" "TDr1711A" "TDr3872A" "TDr1732A"
-    ## [27] "TDr1735A" "TDr2029A" "TDr1760A" "TDr1763C" "TDr1804A" "TDr1775A" "TDr1798A" "TDr1805A" "TDr1807A" "TDr1829A" "TDr1850A" "TDr1899A" "TDr1922C"
-    ## [40] "TDr1935A" "TDr2608A" "TDr2041B" "TDr2121A" "TDr2155A" "TDr2159A" "TDr2161C" "TDr2167A" "TDr2207A" "TDr2210A" "TDr3311B"
+    ##  [1] "TDr2946A" "TDr1489A" "TDr2284A" "TDr1499A" "TDr1509A" "TDr1510A" "TDr3782A" "TDr1858C" "TDr1576A" "TDr1585A" "TDr1585C" "TDr1598A" "TDr1622A" "TDr1628A"
+    ## [15] "TDr1631C" "TDr1649A" "TDr1650B" "TDr1653A" "TDr1655A" "TDr1663A" "TDr1686A" "TDr1707A" "TDr1709A" "TDr1711A" "TDr3872A" "TDr1732A" "TDr1735A" "TDr2029A"
+    ## [29] "TDr1760A" "TDr1763C" "TDr1804A" "TDr1775A" "TDr1798A" "TDr1805A" "TDr1807A" "TDr1829A" "TDr1850A" "TDr1899A" "TDr1922C" "TDr1935A" "TDr2608A" "TDr2041B"
+    ## [43] "TDr2121A" "TDr2155A" "TDr2159A" "TDr2161C" "TDr2167A" "TDr2207A" "TDr2210A" "TDr3311B"
 
 You can also take a look at the variants themselves. Here we’ll read the
 SNP metadata without reading the genotypes.
@@ -219,18 +219,18 @@ refcheck1
 ```
 
     ## DNAStringSet object of length 136429:
-    ##          width seq                                                                                                                    names               
-    ##      [1]     1 G                                                                                                                      chrom_01
-    ##      [2]     1 T                                                                                                                      chrom_01
-    ##      [3]     1 T                                                                                                                      chrom_01
-    ##      [4]     1 A                                                                                                                      chrom_01
-    ##      [5]     1 T                                                                                                                      chrom_01
+    ##          width seq                                                                                                                               names               
+    ##      [1]     1 G                                                                                                                                 chrom_01
+    ##      [2]     1 T                                                                                                                                 chrom_01
+    ##      [3]     1 T                                                                                                                                 chrom_01
+    ##      [4]     1 A                                                                                                                                 chrom_01
+    ##      [5]     1 T                                                                                                                                 chrom_01
     ##      ...   ... ...
-    ## [136425]     1 A                                                                                                                      chrom_20
-    ## [136426]     1 C                                                                                                                      chrom_20
-    ## [136427]     1 T                                                                                                                      chrom_20
-    ## [136428]     1 T                                                                                                                      chrom_20
-    ## [136429]     1 A                                                                                                                      chrom_20
+    ## [136425]     1 A                                                                                                                                 chrom_20
+    ## [136426]     1 C                                                                                                                                 chrom_20
+    ## [136427]     1 T                                                                                                                                 chrom_20
+    ## [136428]     1 T                                                                                                                                 chrom_20
+    ## [136429]     1 A                                                                                                                                 chrom_20
 
 Does that match the reference allele in the VCF?
 
