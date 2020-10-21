@@ -1,13 +1,30 @@
 # Function to get a numeric SNP matrix from a VCF.
 # Biallelic SNPs assumed.
 
-getNumGeno <- function(file){
-  gtmat <- VariantAnnotation::readGT(file)
+getNumGeno <- function(file, ranges = NULL){
+  if(is.null(ranges)){
+    param <- VariantAnnotation::ScanVcfParam()
+  } else {
+    param <- VariantAnnotation::ScanVcfParam(which = ranges)
+  }
+  gtmat <- VariantAnnotation::readGT(file, param = param)
   ct <- stringr::str_count(gtmat, "1")
   ms <- stringr::str_detect(gtmat, "\\.")
   ct[ms] <- NA_integer_
   out <- matrix(ct, nrow = nrow(gtmat), ncol = ncol(gtmat),
                 dimnames = dimnames(gtmat))
+  
+  # Add sample names if missed
+  if(is.null(colnames(gtmat))){
+    hdr <- VariantAnnotation::scanVcfHeader(file)
+    sam <- VariantAnnotation::samples(hdr)
+    sam <- sub("^.*/", "", sam)
+    sam <- sub("\\..*", "", sam)
+    if(!anyDuplicated(sam)){
+      colnames(out) <- sam
+    }
+  }
+  
   return(out)
 }
 

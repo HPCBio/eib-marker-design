@@ -1,0 +1,108 @@
+---
+title: "Selecting markers for marker-assisted selection"
+author: Lindsay Clark, HPCBio, Roy J. Carver Biotechnology Center, University of Illinois,
+  Urbana-Champaign
+date: "October 2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r libs, message = FALSE, warning = FALSE}
+library(VariantAnnotation)
+library(Rsamtools)
+library(ggplot2)
+source("src/marker_stats.R")
+source("src/getNumGeno.R")
+source("src/qtl_markers.R")
+```
+
+```{r files}
+bg <- "data/unique_173_clones.recode.vcf.bgz"
+refgenome <- FaFile("data/TDr96_F1_v2_PseudoChromosome.rev07.fasta")
+```
+
+We will import a spreadsheet listing markers of interest.  I reformatted the
+Excel file that was provided to make it more compatible with R. (I.e., deleted
+all header rows aside from the top one, deleted empty rows, merged multiple
+rows belonging to the same marker, listed trait in each row.)
+
+```{r qtl}
+yam_qtl <- read.csv("data/yam_qtl.csv", stringsAsFactors = FALSE)
+
+head(yam_qtl)
+str(yam_qtl)
+```
+
+We will make a chromosome column to match the chromosome names in the FASTA and
+VCF files.
+
+```{r qtlchr}
+yam_qtl$Chromosome <- sub("_[[:digit:]]+_[ACGT]$", "", yam_qtl$Marker)
+head(yam_qtl)
+```
+
+We will specify ranges in which we wish to look at SNPs for KASP marker design.
+Let's look within 100 kb of each significant SNP.
+
+```{r qtlranges}
+search_distance <- 1e5
+qtl_ranges <- GRanges(yam_qtl$Chromosome,
+                      IRanges(start = yam_qtl$Position - search_distance,
+                              end = yam_qtl$Position + search_distance))
+names(qtl_ranges) <- yam_qtl$Marker
+```
+
+We will import numeric genotypes just within these ranges.
+
+```{r numgen}
+numgen <- getNumGeno(bg, ranges = qtl_ranges)
+str(numgen)
+```
+
+There are 5684 markers across 173 individuals, and genotypes are coded from
+zero to two.
+
+We will also import SNP metadata within these ranges.
+
+```{r importvcf}
+myvcf <- readVcf(bg,
+                 param = ScanVcfParam(geno = NA, which = qtl_ranges))
+
+rowRanges(myvcf)
+```
+
+We can see that the `paramRangeID` column indicates which original marker each
+SNP is near.  Since there were some significant SNPs close to each other, that
+also means we have some duplicates in both `numgen` and `myvcf`.
+
+```{r dupcheck}
+identical(rownames(numgen), names(rowRanges(myvcf)))
+
+as.logical(anyDuplicated(rownames(numgen)))
+```
+
+Below is a function that uses that information to estimate LD of every SNP
+within range with the significant SNP.
+
+```{r ld}
+ld <- LD(numgen, myvcf)
+```
+
+Let's also extract start positions for the sake of plotting.
+
+```{r grangeslist}
+snplist <- split(rowRanges(myvcf), rowRanges(myvcf)$paramRangeID)
+positions <- start(snplist)
+```
+
+```{r}
+i <- 1
+ggplot(mapping = aes(x = positions[[i]], y = ld[[i]])) +
+  geom_point(alpha = 0.3) +
+  labs(x = "Position", y = "R-squared",
+       title = paste("Linkage disequilibrium with", names(snplist)[i]))
+```
+
