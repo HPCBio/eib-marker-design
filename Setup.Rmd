@@ -192,3 +192,19 @@ mean(rowRanges(vcf2)$REF == refcheck2) # this should return 1
 ```
 
 The reference allele matches the reference genome 100% of the time.
+
+## Importing SNP metadata only from a larger VCF
+
+In some cases, you may have a much larger, unfiltered VCF.  Although you don't
+plan to mine markers from the VCF, you still need to know the location and
+alleles of those SNPs so they can be annotated in the flanking sequence that you
+will use for KASP design. The script `snp_positions_from_vcf.R` reads the VCF
+and saves the SNP metadata to an R object.  The script is designed to be run
+on a bioinformatics server or cluster from the terminal like so:
+
+``` bash
+Rscript snp_positions_from_vcf.R --args yam336.m2M2vsnps_missing0.9.recode.vcf yam336.m2M2vsnps_missing0.9.recode.rds
+```
+
+After successfully running it, you can download the `.rds` file to your `data`
+directory.

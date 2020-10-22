@@ -232,8 +232,12 @@ snpdf2 <- filter(snpdf, GCcontent >= 0.4, GCcontent <= 0.6)
 
 ### Number of flanking SNPs
 
-Although we'll annotate flanking SNPs, the fewer there are, the more likely
-the marker won't have technical problems.
+Although we'll annotate flanking SNPs, the fewer there are, the less likely
+the marker will have technical problems.
+
+```{r loadbig}
+bigvcf <- readRDS("data/yam336.m2M2vsnps_missing0.9.recode.rds") ### pick up from here
+```
 
 ```{r nflank}
 snpdf2$Nflanking <- nFlankingSNPs(myvcf, rownames(snpdf2))
