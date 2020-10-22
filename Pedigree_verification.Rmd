@@ -254,48 +254,116 @@ Since we are selecting a small set of markers, we want to not only make sure
 that each individual marker has a high minor allele frequency to maximize its
 information content, but also that the markers complement each other well so
 that they can distinguish individuals and genetic groups.
+
+Two approaches are presented here.  One is a Galaxy tool developed by Carlos
+Ignacio for finding sets of markers that distinguish all accessions.  The
+second is an algorithm I developed to maximize diversity captured within and
+between genetic groups.
+
+### Galaxy tool
+
+First, we have to export our set of suitable markers back to VCF.
+
+```{r subvcf, eval = FALSE}
+rr3 <- rowRanges(myvcf)[rownames(snpdf3)]
+subvcf <- readVcf(bg, genome = seqinfo(myvcf),
+                  param = ScanVcfParam(which = rr3))
+
+writeVcf(subvcf, filename = "results/marker_subset.vcf")
+```
+
+Now, on Galaxy, use the
+[Purity tool](http://galaxy-demo.excellenceinbreeding.org/root?tool_id=purity_beta)
+on that VCF file.  I set it to select 50 markers after considering 10,000
+solutions, and left the distance cutoff at 0.05.  Two files were output, and I
+downloaded the second to my `results` folder.  Below I will import it to get
+the marker set.
+
+```{r}
+markers_purity <- read.delim("results/Galaxy6-[Purity_(beta)_on_data_5].tabular")$Name[1:50]
+
+sort(markers_purity)
+```
+
+### Simulated annealing algorithm
+
 In the file [evaluate_marker_sets.R](src/evaluate_marker_sets.R) there is
 a function to use a
 [simulated annealing algorithm](https://en.wikipedia.org/wiki/Simulated_annealing)
 to find optimal sets of markers that capture diversity within and between
 genetic groups.
 
-```{r}
+```{r echo = FALSE}
 set.seed(1020) # for report reproducibility
 ```
 
 ```{r choosemarkers, message = FALSE}
-markerset <- findMarkerSet(grp_alfreq[rownames(snpdf3),], nSNP = 50)
+markers_simanneal <- findMarkerSet(grp_alfreq[rownames(snpdf3),], nSNP = 50)$Set
 
-sort(markerset$Set)
+sort(markers_simanneal)
 ```
+
+### Comparing the results
 
 How well do the markers distinguish individuals in the dataset?
 
 ```{r markerset_dist}
-dist2 <- interIndividualDist(numgen[markerset$Set,])
+dist_purity <- interIndividualDist(numgen[markers_purity,])
 
-hist(dist2, xlab = "Euclidian distance",
-     main = "Histogram of inter-individual distances using marker subset")
+hist(dist_purity, xlab = "Euclidian distance",
+     main = "Histogram of inter-individual distances using Purity marker subset")
 
-mean(dist2 == 0)
+mean(dist_purity == 0)
+
+dist_simanneal <- interIndividualDist(numgen[markers_simanneal,])
+
+hist(dist_simanneal, xlab = "Euclidian distance",
+     main = "Histogram of inter-individual distances using Purity marker subset")
+
+mean(dist_simanneal == 0)
 ```
 
-If two individuals were selected at random, there is a 0.2% chance that they
-would have identical genotypes across all markers.
+If two individuals were selected at random, there is a 0.4% chance that they
+would have identical genotypes across all markers using the simulated annealing
+algorithm, as opposed to a 0.02% chance using markers from the Purity algorithm.
+So, the Purity algorithm is somewhat better for distinguishing individuals.
+
+We can also compare the geometric mean of expected heterozygosity in all of the
+populations.
+
+```{r markerset_div}
+DivScore(grp_alfreq[markers_purity,])
+DivScore(grp_alfreq[markers_simanneal,])
+```
+
+The simulated annealing algorithm gives higher expected heterozygosity.
+
+We can also see the geometric mean of Jost's D, a differentiation statistic
+among populations.
+
+```{r  markerset_diff}
+DiffScore(grp_alfreq[markers_purity,])
+DiffScore(grp_alfreq[markers_simanneal,])
+```
+
+The simulated annealing algorithm gives higher differentiation among populations.
 
 ## Exporting markers
 
 Now we can get the flanking sequences for the markers that we selected.
 
 ```{r formatkasp}
-markerseq <- formatKasp(myvcf, markerset$Set, refgenome)
+markerseq1 <- formatKasp(myvcf, markers_purity, refgenome)
+markerseq2 <- formatKasp(myvcf, markers_simanneal, refgenome)
 
-head(markerseq)
+head(markerseq1)
 ```
 
 These can be exported to a spreadsheet.
 
 ```{r export}
-write.csv(markerseq, file = "pedigree_verification_markers.csv")
+write.csv(markerseq1, file = "results/pedigree_verification_markers_Purity.csv",
+          row.names = FALSE)
+write.csv(markerseq2, file = "results/pedigree_verification_markers_simanneal.csv",
+          row.names = FALSE)
 ```
