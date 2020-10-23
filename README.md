@@ -46,3 +46,8 @@ be copied to your computer and opened as an RStudio project.
 
 Put your VCF and reference genome FASTA into the `data` directory.  The `results`
 directory is where the output will be after you run the code.
+
+## The workflows
+
+* [Setup](Setup.md)
+* [Choosing markers for pedigree verification](Pedigree_verification.md)
