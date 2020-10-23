@@ -30,12 +30,13 @@ your VCF, reference FASTA, and any other input files. You don’t have to
 put them here, but if they are somewhere else you will need to specify
 the full path to them.
 
-In this case I have two VCFs for two different projects, but you might
+In this case I have three VCFs for two different projects, but you might
 just have one.
 
 ``` r
 vcf1 <- "data/331_new_data_vcf_IBRC.vcf"
 vcf2 <- "data/unique_173_clones.recode.vcf"
+vcf3 <- "data/yam336.m2M2vsnps_missing0.9.recode.vcf"
 genfasta <- "data/TDr96_F1_v2_PseudoChromosome.rev07.fasta"
 ```
 
@@ -131,6 +132,23 @@ hdr2
     ## fixed(2): FILTER ALT
     ## info(17): INDEL IDV ... DP4 MQ
     ## geno(7): GT PL ... GQ GP
+
+## Importing SNP metadata only from a larger VCF
+
+In some cases, you may have a much larger, unfiltered VCF. Although you
+don’t plan to mine markers from the VCF, you still need to know the
+location and alleles of those SNPs so they can be annotated in the
+flanking sequence that you will use for KASP design. The script
+`snp_positions_from_vcf.R` reads the VCF and saves the SNP metadata to
+an R object. The script is designed to be run on a bioinformatics server
+or cluster from the terminal like so:
+
+``` bash
+Rscript snp_positions_from_vcf.R --args yam336.m2M2vsnps_missing0.9.recode.vcf yam336.m2M2vsnps_missing0.9.recode.rds
+```
+
+After successfully running it, you can download the `.rds` file to your
+`data` directory.
 
 ## Quality control
 
@@ -311,3 +329,14 @@ mean(rowRanges(vcf2)$REF == refcheck2) # this should return 1
     ## [1] 1
 
 The reference allele matches the reference genome 100% of the time.
+
+We can check with our larger VCF as well.
+
+``` r
+vcf3 <- readRDS(sub("vcf$", "rds", vcf3))
+
+refcheck3 <- scanFa(refgenome, rowRanges(vcf3))
+mean(rowRanges(vcf3)$REF == refcheck3) # this should return 1
+```
+
+    ## [1] 1

@@ -31,20 +31,35 @@ fixTasselNames <- function(x){
 }
 
 # Function to get a GRanges object from a VCF, but with the names corrected.
-rowRanges_correctedSeqnames <- function(vcf, markers = rownames(vcf),
+rowRanges_correctedSeqnames <- function(rr, markers = rownames(vcf),
                                         fixfn = fixTasselNames){
-  rr <- SummarizedExperiment::rowRanges(vcf)[markers]
   rr1 <- GenomicRanges::GRanges(fixfn(GenomeInfoDb::seqnames(rr)),
                                 IRanges::ranges(rr))
   S4Vectors::mcols(rr1) <- S4Vectors::mcols(rr)
   return(rr1)
 }
 
+# Function to correct the row names to match marker names, starting
+# from rowRanges.
+rowRanges_correctedMarkerNames <- function(rr, markers){
+  if(!all(markers %in% names(rr))){
+    names(rr) <- paste(GenomeInfoDb::seqnames(rr),
+                       BiocGenerics::start(rr), sep = "_")
+  }
+  if(!all(markers %in% names(rr))){
+    stop("Unable to match marker names to VCF.")
+  }
+  return(rr)
+}
+
 # Function to get the proportion GC content for the flanking regions for a set
 # of SNPs.
 gcContent <- function(vcf, markers, refgenome, flanking_bp = 50,
                       fixfn = fixTasselNames){
-  rr <- rowRanges_correctedSeqnames(vcf, markers, fixfn)
+  rr <- SummarizedExperiment::rowRanges(vcf)
+  rr <- rowRanges_correctedMarkerNames(rr, markers)
+  rr <- rr[markers,]
+  rr <- rowRanges_correctedSeqnames(rr, markers, fixfn)
   rr2 <- getKaspRange(rr, flanking_bp = flanking_bp)
   seq <- Rsamtools::scanFa(refgenome, rr2, as = "DNAStringSet")
   tally <- Biostrings::letterFrequency(seq, c("ATW", "GCS"))
@@ -56,6 +71,7 @@ gcContent <- function(vcf, markers, refgenome, flanking_bp = 50,
 # Function to count the number of SNPs in the flanking region for each SNP.
 nFlankingSNPs <- function(vcf, markers, flanking_bp = 50){
   rr <- SummarizedExperiment::rowRanges(vcf)
+  rr <- rowRanges_correctedMarkerNames(rr, markers)
   rr2 <- getKaspRange(rr[markers], flanking_bp = flanking_bp)
   fo <- GenomicRanges::findOverlaps(rr2, rr, type = "any")
   nhits <- S4Vectors::countLnodeHits(fo) - 1
@@ -69,7 +85,9 @@ nFlankingSNPs <- function(vcf, markers, flanking_bp = 50){
 # Function to format SNPs for KASP assay, annotating flanking SNPs.
 formatKasp <- function(vcf, markers, refgenome, flanking_bp = 50,
                        fixfn = fixTasselNames){
-  rr <- rowRanges_correctedSeqnames(vcf, markers = rownames(vcf), fixfn = fixfn)
+  rr <- SummarizedExperiment::rowRanges(vcf)
+  rr <- rowRanges_correctedMarkerNames(rr, markers)
+  rr <- rowRanges_correctedSeqnames(rr, markers = rownames(vcf), fixfn = fixfn)
   rr2 <- getKaspRange(rr[markers], flanking_bp = flanking_bp)
   seq <- Rsamtools::scanFa(refgenome, rr2, as = "DNAStringSet")
   fo <- GenomicRanges::findOverlaps(rr2, rr, type = "any")

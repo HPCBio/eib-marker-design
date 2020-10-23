@@ -30,6 +30,7 @@ to point to your dataset.
 
 ``` r
 bg <- "data/331_new_data_vcf_IBRC.vcf.bgz"
+rds <- "data/yam336.m2M2vsnps_missing0.9.recode.rds" # unfiltered markers; optional
 refgenome <- FaFile("data/TDr96_F1_v2_PseudoChromosome.rev07.fasta")
 ```
 
@@ -122,7 +123,7 @@ ggplot(mapping = aes(x = alfreq, y = Ho/He)) +
 
 ![](Pedigree_verification_files/figure-gfm/hohe_vs_alfreq-1.png)<!-- -->
 
-We can see what proportion of markers we would lose at this cutoff, It’s
+We can see what proportion of markers we would lose at this cutoff. It’s
 about 11%.
 
 ``` r
@@ -252,31 +253,58 @@ head(grp_alfreq)
 ## Technical parameters
 
 For this portion of the workflow, we’ll import SNP metadata using the
-`VariantAnnotation` package.
+`VariantAnnotation` package. If you are just working with one VCF, use
+the following code:
 
 ``` r
 myvcf <- readVcf(bg,
                  param = ScanVcfParam(geno = NA))
+```
+
+Otherwise, if you have a larger VCF, with a bigger set of markers, read
+it from the RDS made during setup:
+
+``` r
+myvcf <- readRDS(rds)
 
 rowRanges(myvcf)
 ```
 
-    ## GRanges object with 136429 ranges and 5 metadata columns:
-    ##                     seqnames    ranges strand | paramRangeID            REF                ALT      QUAL      FILTER
-    ##                        <Rle> <IRanges>  <Rle> |     <factor> <DNAStringSet> <DNAStringSetList> <numeric> <character>
-    ##      chrom_01_32840    OM_01     32840      * |           NA              G                  A        NA        PASS
-    ##      chrom_01_45700    OM_01     45700      * |           NA              A                  T        NA        PASS
-    ##      chrom_01_58956    OM_01     58956      * |           NA              T                  C        NA        PASS
-    ##      chrom_01_62865    OM_01     62865      * |           NA              A                  T        NA        PASS
-    ##      chrom_01_65124    OM_01     65124      * |           NA              G                  T        NA        PASS
-    ##                 ...      ...       ...    ... .          ...            ...                ...       ...         ...
-    ##   chrom_20_33017477    OM_20  33017477      * |           NA              A                  G        NA        PASS
-    ##   chrom_20_33017823    OM_20  33017823      * |           NA              C                  T        NA        PASS
-    ##   chrom_20_33017839    OM_20  33017839      * |           NA              T                  C        NA        PASS
-    ##   chrom_20_33017917    OM_20  33017917      * |           NA              T                  C        NA        PASS
-    ##   chrom_20_33018263    OM_20  33018263      * |           NA              A                  G        NA        PASS
+    ## GRanges object with 6095038 ranges and 5 metadata columns:
+    ##                         seqnames    ranges strand | paramRangeID            REF                ALT      QUAL      FILTER
+    ##                            <Rle> <IRanges>  <Rle> |     <factor> <DNAStringSet> <DNAStringSetList> <numeric> <character>
+    ##      chrom_01:32610_A/T chrom_01     32610      * |           NA              A                  T  11.38340           .
+    ##      chrom_01:32612_G/T chrom_01     32612      * |           NA              G                  T   9.86092           .
+    ##      chrom_01:32617_A/C chrom_01     32617      * |           NA              A                  C 352.00000           .
+    ##      chrom_01:32628_C/T chrom_01     32628      * |           NA              C                  T 118.00000           .
+    ##      chrom_01:32656_A/G chrom_01     32656      * |           NA              A                  G 293.00000           .
+    ##                     ...      ...       ...    ... .          ...            ...                ...       ...         ...
+    ##   chrom_20:33018647_T/G chrom_20  33018647      * |           NA              T                  G 999.00000           .
+    ##   chrom_20:33018670_A/T chrom_20  33018670      * |           NA              A                  T 352.00000           .
+    ##   chrom_20:33018687_C/G chrom_20  33018687      * |           NA              C                  G 999.00000           .
+    ##   chrom_20:33018902_T/C chrom_20  33018902      * |           NA              T                  C   6.42809           .
+    ##   chrom_20:33018924_C/T chrom_20  33018924      * |           NA              C                  T 999.00000           .
     ##   -------
-    ##   seqinfo: 20 sequences from an unspecified genome; no seqlengths
+    ##   seqinfo: 2253 sequences from an unspecified genome
+
+Since we have quality scores, we will look at the distribution.
+
+``` r
+hist(rowRanges(myvcf)$QUAL, xlab = "Quality score",
+     main = "Histogram of quality scores in large VCF")
+```
+
+![](Pedigree_verification_files/figure-gfm/qualhist-1.png)<!-- -->
+
+This suggests filtering to only keep the highest scores is advisable. We
+will also make sure to keep any SNPs that were in our smaller VCF.
+
+``` r
+temp <- paste(seqnames(myvcf), start(myvcf), sep = "_")
+
+myvcf <- myvcf[rowRanges(myvcf)$QUAL > 900 | 
+                 temp %in% rownames(snpdf),]
+```
 
 ### GC content
 
@@ -306,8 +334,8 @@ snpdf2 <- filter(snpdf, GCcontent >= 0.4, GCcontent <= 0.6)
 
 ### Number of flanking SNPs
 
-Although we’ll annotate flanking SNPs, the fewer there are, the more
-likely the marker won’t have technical problems.
+Although we’ll annotate flanking SNPs, the fewer there are, the less
+likely the marker will have technical problems.
 
 ``` r
 snpdf2$Nflanking <- nFlankingSNPs(myvcf, rownames(snpdf2))
@@ -318,80 +346,192 @@ hist(snpdf2$Nflanking, xlab = "Number of flanking SNPs",
 
 ![](Pedigree_verification_files/figure-gfm/nflank-1.png)<!-- -->
 
-There seem to be plenty with no flanking SNPs, so we will just keep
-those.
-
 ``` r
-snpdf3 <- filter(snpdf2, Nflanking == 0)
+table(snpdf2$Nflanking)
 ```
 
-### Choosing a set of markers
+    ## 
+    ##     0     1     2     3     4     5     6     7     8     9    10    11    12    13    14    15 
+    ##  5925 10224 10255  8104  5057  2576  1188   494   259   107    60    36     8     7     4     2
+
+The cutoff is arbitrary, but let’s keep markers with two or fewer
+flanking SNPs.
+
+``` r
+snpdf3 <- filter(snpdf2, Nflanking <= 2)
+```
+
+## Choosing a set of markers
 
 Since we are selecting a small set of markers, we want to not only make
 sure that each individual marker has a high minor allele frequency to
 maximize its information content, but also that the markers complement
 each other well so that they can distinguish individuals and genetic
-groups. In the file
-[evaluate\_marker\_sets.R](src/evaluate_marker_sets.R) there is a
-function to use a [simulated annealing
+groups.
+
+Two approaches are presented here. One is a Galaxy tool developed by
+Carlos Ignacio for finding sets of markers that distinguish all
+accessions. The second is an algorithm I developed to maximize diversity
+captured within and between genetic groups.
+
+### Galaxy tool
+
+First, we have to export our set of suitable markers back to VCF. Some
+conversion of marker and chromosome names is done here in order to get
+everything to match.
+
+``` r
+rr3 <- rowRanges(myvcf)[match(rownames(snpdf3),
+                              paste(seqnames(myvcf), start(myvcf), sep = "_"))]
+rr3a <- GRanges(sub("chrom", "OM", seqnames(rr3)), ranges(rr3))
+subvcf <- readVcf(bg, genome = seqinfo(rr3a),
+                  param = ScanVcfParam(which = rr3a))
+
+writeVcf(subvcf, filename = "results/marker_subset.vcf")
+```
+
+Now, on Galaxy, use the [Purity
+tool](http://galaxy-demo.excellenceinbreeding.org/root?tool_id=purity_beta)
+on that VCF file. I set it to select 50 markers after considering 10,000
+solutions, and left the distance cutoff at 0.05. Two files were output,
+and I downloaded the first to my `results` folder. Below I will import
+it to get the marker set.
+
+``` r
+markers_purity <- read.delim("results/Galaxy9-[Purity_(beta)_on_data_8].tabular")$Name[1:50]
+
+sort(markers_purity)
+```
+
+    ##  [1] "chrom_01_13215574" "chrom_01_16722696" "chrom_03_8145709"  "chrom_05_1402614"  "chrom_05_15642980" "chrom_05_16166857" "chrom_05_19197424" "chrom_06_11370264"
+    ##  [9] "chrom_06_1389600"  "chrom_06_16474865" "chrom_06_1721907"  "chrom_06_20333485" "chrom_07_25601418" "chrom_07_25862177" "chrom_08_14532723" "chrom_09_17245165"
+    ## [17] "chrom_09_20244151" "chrom_10_23384975" "chrom_11_15371387" "chrom_11_7476286"  "chrom_12_10725268" "chrom_12_19461014" "chrom_12_19554292" "chrom_12_19646887"
+    ## [25] "chrom_12_9869300"  "chrom_13_2047134"  "chrom_13_45513"    "chrom_14_8004400"  "chrom_15_13652946" "chrom_15_15308370" "chrom_15_182038"   "chrom_15_3166274" 
+    ## [33] "chrom_15_3532953"  "chrom_15_3558766"  "chrom_16_11923021" "chrom_16_11941748" "chrom_16_12630527" "chrom_16_18591145" "chrom_16_22290712" "chrom_16_8905213" 
+    ## [41] "chrom_17_12293584" "chrom_17_13343607" "chrom_17_19171588" "chrom_17_2594646"  "chrom_17_2672794"  "chrom_18_15163101" "chrom_18_16385238" "chrom_19_22645412"
+    ## [49] "chrom_19_22953072" "chrom_20_31820360"
+
+### Simulated annealing algorithm
+
+In the file [evaluate\_marker\_sets.R](src/evaluate_marker_sets.R) there
+is a function to use a [simulated annealing
 algorithm](https://en.wikipedia.org/wiki/Simulated_annealing) to find
 optimal sets of markers that capture diversity within and between
 genetic groups.
 
 ``` r
-markerset <- findMarkerSet(grp_alfreq[rownames(snpdf3),], nSNP = 50)
+markers_simanneal <- findMarkerSet(grp_alfreq[rownames(snpdf3),], nSNP = 50)$Set
 
-sort(markerset$Set)
+sort(markers_simanneal)
 ```
 
-    ##  [1] "chrom_01_23460613" "chrom_01_7371392"  "chrom_02_18854175" "chrom_02_8192166"  "chrom_03_3145899"  "chrom_04_10618167" "chrom_04_1422542"  "chrom_04_8709401" 
-    ##  [9] "chrom_05_17440494" "chrom_05_26274143" "chrom_06_13437232" "chrom_06_1447442"  "chrom_06_15510521" "chrom_06_19822795" "chrom_06_469304"   "chrom_07_19048297"
-    ## [17] "chrom_08_16432568" "chrom_08_19093371" "chrom_08_2766827"  "chrom_08_3830330"  "chrom_08_5200475"  "chrom_09_1827751"  "chrom_10_10758593" "chrom_10_15244241"
-    ## [25] "chrom_10_16549585" "chrom_10_19555171" "chrom_10_20662997" "chrom_10_756562"   "chrom_11_2297948"  "chrom_11_7064329"  "chrom_12_19490150" "chrom_14_14951168"
-    ## [33] "chrom_14_20309706" "chrom_14_422581"   "chrom_15_12013814" "chrom_15_13166455" "chrom_15_13609528" "chrom_15_13952267" "chrom_15_17048703" "chrom_15_17411334"
-    ## [41] "chrom_15_18600988" "chrom_16_13201075" "chrom_16_20811877" "chrom_17_19787441" "chrom_17_19897566" "chrom_17_20162554" "chrom_17_577577"   "chrom_17_9140601" 
-    ## [49] "chrom_19_20026146" "chrom_19_21300319"
+    ##  [1] "chrom_01_27275023" "chrom_02_16909288" "chrom_02_23698309" "chrom_03_18568582" "chrom_04_10618167" "chrom_04_15150750" "chrom_04_8900737"  "chrom_05_1384592" 
+    ##  [9] "chrom_05_17000860" "chrom_05_24296120" "chrom_06_10055883" "chrom_06_15349033" "chrom_06_16479684" "chrom_07_15156246" "chrom_07_29826812" "chrom_08_15408226"
+    ## [17] "chrom_08_16065388" "chrom_09_6928209"  "chrom_10_10660488" "chrom_10_11528458" "chrom_10_14200449" "chrom_10_272561"   "chrom_10_482457"   "chrom_10_663980"  
+    ## [25] "chrom_11_13649874" "chrom_11_2407008"  "chrom_11_6797536"  "chrom_12_19646887" "chrom_14_14921513" "chrom_14_15526286" "chrom_14_20907274" "chrom_15_11969634"
+    ## [33] "chrom_15_12971805" "chrom_15_13236354" "chrom_15_14027608" "chrom_15_16810337" "chrom_15_17159846" "chrom_15_18443213" "chrom_15_18600988" "chrom_16_13058451"
+    ## [41] "chrom_16_20344737" "chrom_16_21818296" "chrom_17_19787441" "chrom_17_9162321"  "chrom_17_9798706"  "chrom_18_7929814"  "chrom_19_21300319" "chrom_19_22363327"
+    ## [49] "chrom_19_23929271" "chrom_19_30122820"
+
+### Comparing the results
 
 How well do the markers distinguish individuals in the dataset?
 
 ``` r
-dist2 <- interIndividualDist(numgen[markerset$Set,])
+dist_purity <- interIndividualDist(numgen[markers_purity,])
 
-hist(dist2, xlab = "Euclidian distance",
-     main = "Histogram of inter-individual distances using marker subset")
+hist(dist_purity, xlab = "Euclidian distance",
+     main = "Histogram of inter-individual distances using Purity marker subset")
 ```
 
 ![](Pedigree_verification_files/figure-gfm/markerset_dist-1.png)<!-- -->
 
 ``` r
-mean(dist2 == 0)
+mean(dist_purity == 0)
 ```
 
-    ## [1] 0.003595522
+    ## [1] 9.26681e-05
+
+``` r
+dist_simanneal <- interIndividualDist(numgen[markers_simanneal,])
+
+hist(dist_simanneal, xlab = "Euclidian distance",
+     main = "Histogram of inter-individual distances using simulated annealing marker subset")
+```
+
+![](Pedigree_verification_files/figure-gfm/markerset_dist-2.png)<!-- -->
+
+``` r
+mean(dist_simanneal == 0)
+```
+
+    ## [1] 0.00194603
 
 If two individuals were selected at random, there is a 0.2% chance that
-they would have identical genotypes across all markers.
+they would have identical genotypes across all markers using the
+simulated annealing algorithm, as opposed to a 0.01% chance using
+markers from the Purity algorithm. So, the Purity algorithm is somewhat
+better for distinguishing individuals.
 
-### Exporting markers
+We can also compare the geometric mean of expected heterozygosity in all
+of the populations.
+
+``` r
+DivScore(grp_alfreq[markers_purity,])
+```
+
+    ## [1] 0.2987475
+
+``` r
+DivScore(grp_alfreq[markers_simanneal,])
+```
+
+    ## [1] 0.3681497
+
+The simulated annealing algorithm gives higher expected heterozygosity.
+
+We can also see the geometric mean of Jost’s D, a differentiation
+statistic among populations.
+
+``` r
+DiffScore(grp_alfreq[markers_purity,])
+```
+
+    ## [1] 0.0417267
+
+``` r
+DiffScore(grp_alfreq[markers_simanneal,])
+```
+
+    ## [1] 0.09835632
+
+The simulated annealing algorithm gives higher differentiation among
+populations.
+
+## Exporting markers
 
 Now we can get the flanking sequences for the markers that we selected.
 
 ``` r
-markerseq <- formatKasp(myvcf, markerset$Set, refgenome)
+markerseq1 <- formatKasp(myvcf, markers_purity, refgenome)
+markerseq2 <- formatKasp(myvcf, markers_simanneal, refgenome)
 
-head(markerseq)
+head(markerseq1)
 ```
 
     ##              SNP_ID                                                                                                Sequence
-    ## 1  chrom_08_5200475 GCTGCCGGTGGTTCACGGTTTGTTCCCATACCAGAAGCAGACGATGAGGA[Y]GATGATGGTGAGTTTCAGGGCTTTTCAGTCACGCCCACCAGCACATCACC
-    ## 2   chrom_06_469304 AGGAATTAGAAGAGGTGAGCTGCGAACGAACCAGTGCTAGTTCTGTAATT[R]TGTCAGAAATATGAGGGTGATTGTTGTAAGTTTTAACGCAGTTGATAGTC
-    ## 3 chrom_10_10758593 GGAGAAATTGAATAACCTCTCAACCTCGCACTCGTATAGAATTGCAATGA[R]TTCTAGGGATTCCAAGTGATAAACCCTATCCCTATGTATAGACCTAACCC
-    ## 4 chrom_14_14951168 ATCTCTGTGTACCTCCAGAGCATCCATACACATAAATGACTCCTCATGCG[R]TTACCAGTACAACCAGTGTCAAATAGGAATGTAGGATGATCCTCTCTTTC
-    ## 5 chrom_08_16432568 GTAAAACCACTGGCCACCAACCGGGTTTGTAGCAATCAACTGTACCATCA[R]CTTTGTGCTTGATAGAGAAGACCTATCGGCAAGTGACGACACTGGTATCA
-    ## 6 chrom_19_20026146 AAGGTAGGTCTTGGGAGCATTGCAAGCACTGGTATCAGGATCAATCCCCG[R]CCCCCAATGCCAGAGTCTTCGTACTCGACAGCACAGCAGGGTACAACATC
+    ## 1 chrom_01_13215574 CACCGCTAGGRGAGTTGAGTATAGAGTTCAGCAGTCCACTTCTTCGACTG[Y]TGCTTCTGAGGTACTCCMGGTAGGTGAAGATACCCCTGTCCCACCACTAA
+    ## 2 chrom_01_16722696 GGTACCGATCCGACGAGCTGTATCCTAGGCCGGACAAAGGGACCCTTGGA[Y]GAGTAGAAGACTCTCCAAAAGACCATCACCACAACTATYGAGGARGTTTT
+    ## 3  chrom_03_8145709 TTTGCTATTCYCGAGCACCAGGTGCATTTTGAACGTTTGTCGAGACTTTC[R]TTTCGGACATACTCGATTCCTGGACACAAGCATATTAATAGATCTACGRC
+    ## 4  chrom_05_1402614 ATACCCCTGGAAGATCTAATCCAAGGGGTAGGCTGCCCATTAATAAGAAA[R]GAAAAGGAGGTGGAAGAAATACAAGCTTCTATCCAGGAGATCCAAATAGG
+    ## 5 chrom_05_15642980 CAACAGAGTGATGTGTTGAAGTAATCYTTAGTGCTGGGGCTTAATTKTGA[S]TAGAGGTCTTTCACCTAGACCAAAGGGTTAGATCTATATTAGGGAATAGG
+    ## 6 chrom_05_16166857 ATTCCTAAGTTGGTGGTGAATCGACCTGCTTCTCTTTTCCCTTATACTTG[Y]TTTATATGGACTCCTTCCCACTTGTTTTAGCCACCTTATGCTTCTCCGTT
 
 These can be exported to a spreadsheet.
 
 ``` r
-write.csv(markerseq, file = "pedigree_verification_markers.csv")
+write.csv(markerseq1, file = "results/pedigree_verification_markers_Purity.csv",
+          row.names = FALSE)
+write.csv(markerseq2, file = "results/pedigree_verification_markers_simanneal.csv",
+          row.names = FALSE)
 ```

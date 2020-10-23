@@ -34,6 +34,7 @@ point to your dataset.
 
 ```{r files}
 bg <- "data/331_new_data_vcf_IBRC.vcf.bgz"
+rds <- "data/yam336.m2M2vsnps_missing0.9.recode.rds" # unfiltered markers; optional
 refgenome <- FaFile("data/TDr96_F1_v2_PseudoChromosome.rev07.fasta")
 ```
 
@@ -200,13 +201,38 @@ head(grp_alfreq)
 ## Technical parameters
 
 For this portion of the workflow, we'll import SNP metadata using the
-`VariantAnnotation` package.
+`VariantAnnotation` package.  If you are just working with one VCF,
+use the following code:
 
-```{r importvcf}
+```{r importvcf, eval = FALSE}
 myvcf <- readVcf(bg,
                  param = ScanVcfParam(geno = NA))
+```
+
+Otherwise, if you have a larger VCF, with a bigger set of markers,
+read it from the RDS made during setup:
+
+```{r imporvcf2}
+myvcf <- readRDS(rds)
 
 rowRanges(myvcf)
+```
+
+Since we have quality scores, we will look at the distribution.
+
+```{r qualhist}
+hist(rowRanges(myvcf)$QUAL, xlab = "Quality score",
+     main = "Histogram of quality scores in large VCF")
+```
+
+This suggests filtering to only keep the highest scores is advisable.
+We will also make sure to keep any SNPs that were in our smaller VCF.
+
+```{r filtervcf}
+temp <- paste(seqnames(myvcf), start(myvcf), sep = "_")
+
+myvcf <- myvcf[rowRanges(myvcf)$QUAL > 900 | 
+                 temp %in% rownames(snpdf),]
 ```
 
 ### GC content
@@ -235,21 +261,18 @@ snpdf2 <- filter(snpdf, GCcontent >= 0.4, GCcontent <= 0.6)
 Although we'll annotate flanking SNPs, the fewer there are, the less likely
 the marker will have technical problems.
 
-```{r loadbig}
-bigvcf <- readRDS("data/yam336.m2M2vsnps_missing0.9.recode.rds") ### pick up from here
-```
-
 ```{r nflank}
 snpdf2$Nflanking <- nFlankingSNPs(myvcf, rownames(snpdf2))
 
 hist(snpdf2$Nflanking, xlab = "Number of flanking SNPs",
      main = "Histogram of number of flanking SNPs")
+table(snpdf2$Nflanking)
 ```
 
-There seem to be plenty with no flanking SNPs, so we will just keep those.
+The cutoff is arbitrary, but let's keep markers with two or fewer flanking SNPs.
 
 ```{r flankfilt}
-snpdf3 <- filter(snpdf2, Nflanking == 0)
+snpdf3 <- filter(snpdf2, Nflanking <= 2)
 ```
 
 ## Choosing a set of markers
@@ -266,12 +289,15 @@ between genetic groups.
 
 ### Galaxy tool
 
-First, we have to export our set of suitable markers back to VCF.
+First, we have to export our set of suitable markers back to VCF.  Some conversion
+of marker and chromosome names is done here in order to get everything to match.
 
 ```{r subvcf, eval = FALSE}
-rr3 <- rowRanges(myvcf)[rownames(snpdf3)]
-subvcf <- readVcf(bg, genome = seqinfo(myvcf),
-                  param = ScanVcfParam(which = rr3))
+rr3 <- rowRanges(myvcf)[match(rownames(snpdf3),
+                              paste(seqnames(myvcf), start(myvcf), sep = "_"))]
+rr3a <- GRanges(sub("chrom", "OM", seqnames(rr3)), ranges(rr3))
+subvcf <- readVcf(bg, genome = seqinfo(rr3a),
+                  param = ScanVcfParam(which = rr3a))
 
 writeVcf(subvcf, filename = "results/marker_subset.vcf")
 ```
@@ -280,11 +306,11 @@ Now, on Galaxy, use the
 [Purity tool](http://galaxy-demo.excellenceinbreeding.org/root?tool_id=purity_beta)
 on that VCF file.  I set it to select 50 markers after considering 10,000
 solutions, and left the distance cutoff at 0.05.  Two files were output, and I
-downloaded the second to my `results` folder.  Below I will import it to get
+downloaded the first to my `results` folder.  Below I will import it to get
 the marker set.
 
 ```{r}
-markers_purity <- read.delim("results/Galaxy6-[Purity_(beta)_on_data_5].tabular")$Name[1:50]
+markers_purity <- read.delim("results/Galaxy9-[Purity_(beta)_on_data_8].tabular")$Name[1:50]
 
 sort(markers_purity)
 ```
@@ -322,14 +348,14 @@ mean(dist_purity == 0)
 dist_simanneal <- interIndividualDist(numgen[markers_simanneal,])
 
 hist(dist_simanneal, xlab = "Euclidian distance",
-     main = "Histogram of inter-individual distances using Purity marker subset")
+     main = "Histogram of inter-individual distances using simulated annealing marker subset")
 
 mean(dist_simanneal == 0)
 ```
 
-If two individuals were selected at random, there is a 0.4% chance that they
+If two individuals were selected at random, there is a 0.2% chance that they
 would have identical genotypes across all markers using the simulated annealing
-algorithm, as opposed to a 0.02% chance using markers from the Purity algorithm.
+algorithm, as opposed to a 0.01% chance using markers from the Purity algorithm.
 So, the Purity algorithm is somewhat better for distinguishing individuals.
 
 We can also compare the geometric mean of expected heterozygosity in all of the
