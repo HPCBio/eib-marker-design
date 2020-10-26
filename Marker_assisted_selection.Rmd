@@ -10,6 +10,11 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+## Setup
+
+Be sure you have completed the [setup](Setup.md) steps before working through
+this pipeline.  First we'll load all the needed packages and functions.
+
 ```{r libs, message = FALSE, warning = FALSE}
 library(VariantAnnotation)
 library(Rsamtools)
@@ -19,10 +24,17 @@ source("src/getNumGeno.R")
 source("src/qtl_markers.R")
 ```
 
+Below are names of genomics files.  Edit these to match your file names.
+
 ```{r files}
 bg <- "data/unique_173_clones.recode.vcf.bgz"
+rds <- "data/yam336.m2M2vsnps_missing0.9.recode.rds" # unfiltered markers; optional
 refgenome <- FaFile("data/TDr96_F1_v2_PseudoChromosome.rev07.fasta")
 ```
+
+## Data import
+
+### Significant SNPs
 
 We will import a spreadsheet listing markers of interest.  I reformatted the
 Excel file that was provided to make it more compatible with R. (I.e., deleted
@@ -32,17 +44,19 @@ rows belonging to the same marker, listed trait in each row.)
 ```{r qtl}
 yam_qtl <- read.csv("data/yam_qtl.csv", stringsAsFactors = FALSE)
 
-head(yam_qtl)
 str(yam_qtl)
 ```
 
 We will make a chromosome column to match the chromosome names in the FASTA and
-VCF files.
+VCF files.  We'll also make a marker name column with the allele trimmed off.
 
 ```{r qtlchr}
 yam_qtl$Chromosome <- sub("_[[:digit:]]+_[ACGT]$", "", yam_qtl$Marker)
+yam_qtl$Marker_short <- sub("_[ACGT]$", "", yam_qtl$Marker)
 head(yam_qtl)
 ```
+
+### Genotypes and annotations from VCF
 
 We will specify ranges in which we wish to look at SNPs for KASP marker design.
 Let's look within 100 kb of each significant SNP.
@@ -84,6 +98,77 @@ identical(rownames(numgen), names(rowRanges(myvcf)))
 as.logical(anyDuplicated(rownames(numgen)))
 ```
 
+### Unfiltered VCF
+
+In this case we had a much larger VCF with rarer SNPs, so we will import that too.
+
+```{r imporvcf2}
+bigvcf <- readRDS(rds)
+
+rowRanges(bigvcf)
+```
+
+Since we have quality scores, we will look at the distribution.
+
+```{r qualhist}
+hist(rowRanges(bigvcf)$QUAL, xlab = "Quality score",
+     main = "Histogram of quality scores in large VCF")
+```
+
+This suggests filtering to only keep the highest scores is advisable.
+We will also make sure to keep any SNPs that were in our smaller VCF.
+
+```{r filtervcf}
+temp <- paste(seqnames(bigvcf), start(bigvcf), sep = "_")
+
+bigvcf <- bigvcf[rowRanges(bigvcf)$QUAL > 900 | 
+                temp %in% names(myvcf),]
+rm(temp)
+```
+
+Lastly, we will filter the VCF to only contain SNPs in our QTL ranges.
+
+```{r}
+bigvcf <- subsetByOverlaps(bigvcf, qtl_ranges)
+```
+
+## Technical parameters for marker design from significant SNPs
+
+Ideally, we would like to design markers directly from the significant hits.
+We should check that they will make reasonably good KASP markers first,
+however.
+
+### GC content
+
+PCR will work best when GC content is 40-60%.
+
+```{r}
+yam_qtl$GCcontent <- gcContent(myvcf, yam_qtl$Marker_short, refgenome)
+
+hist(yam_qtl$GCcontent, xlab = "GC content",
+     main = "GC content flanking significant SNPs", breaks = 20)
+```
+
+Many are below the desired range, so we may see if there are any nearby
+SNPs in LD that have better GC content.
+
+### Number of flanking SNPs
+
+A few flanking SNPs are okay, but we want to make sure none of these
+have an excessive amount.
+
+```{r}
+yam_qtl$Nflanking <- nFlankingSNPs(bigvcf, yam_qtl$Marker_short)
+
+hist(yam_qtl$Nflanking, xlab = "Number of flanking SNPs",
+     main = "Number of flanking SNPs within 50 bp of significant SNPs")
+table(yam_qtl$Nflanking)
+```
+
+For those with three or more, we might see if there are better markers.
+
+## Finding markers in linkage disequilibrium (LD)
+
 Below is a function that uses that information to estimate LD of every SNP
 within range with the significant SNP.
 
@@ -106,3 +191,6 @@ ggplot(mapping = aes(x = positions[[i]], y = ld[[i]])) +
        title = paste("Linkage disequilibrium with", names(snplist)[i]))
 ```
 
+The actual SNP of interest shows up as 100% LD in the middle of the range.  There
+are a few nearby around 75% LD, which is not great but we might consider those if
+the SNP of interest is in a very low GC region, for example.
