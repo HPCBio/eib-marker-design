@@ -59,21 +59,21 @@ set.seed(1019) # to make report reproducible
 ```
 
 ```{r inddist}
-mydist <- interIndividualDist(numgen)
+myIBS <- interIndividualIBS(numgen)
 
-hist(mydist, xlab = "Euclidian distance", main = "Histogram of inter-individual distances")
+hist(myIBS, xlab = "Identity-by-state", main = "Histogram of IBS")
 ```
 
 ```{r njtree, fig.height = 6, fig.width = 6}
-plot(nj(mydist), type = "unrooted", show.tip.label = FALSE)
+plot(nj(1 - myIBS), type = "unrooted", show.tip.label = FALSE)
 ```
 
 Here it looks like the most closely related individuals are family members, not
-clones.  If there were some values closer to zero, however, clones could be
+clones.  If there were some values closer to one, however, clones could be
 removed using the `removeClones` function.
 
 ```{r removeclones}
-numgen <- removeClones(numgen, mydist)
+numgen <- removeClones(numgen, myIBS)
 ```
 
 ### Observed and expected heterozygosity
@@ -338,19 +338,19 @@ sort(markers_simanneal)
 How well do the markers distinguish individuals in the dataset?
 
 ```{r markerset_dist}
-dist_purity <- interIndividualDist(numgen[markers_purity,])
+ibs_purity <- interIndividualIBS(numgen[markers_purity,])
 
-hist(dist_purity, xlab = "Euclidian distance",
-     main = "Histogram of inter-individual distances using Purity marker subset")
+hist(ibs_purity, xlab = "Identity-by-state",
+     main = "Histogram of IBS using Purity marker subset")
 
-mean(dist_purity == 0)
+mean(ibs_purity == 1)
 
-dist_simanneal <- interIndividualDist(numgen[markers_simanneal,])
+ibs_simanneal <- interIndividualIBS(numgen[markers_simanneal,])
 
-hist(dist_simanneal, xlab = "Euclidian distance",
-     main = "Histogram of inter-individual distances using simulated annealing marker subset")
+hist(ibs_simanneal, xlab = "Identity-by-state",
+     main = "Histogram of IBS using simulated annealing marker subset")
 
-mean(dist_simanneal == 0)
+mean(ibs_simanneal == 1)
 ```
 
 If two individuals were selected at random, there is a 0.2% chance that they

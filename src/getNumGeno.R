@@ -30,19 +30,21 @@ getNumGeno <- function(file, ranges = NULL){
 
 # Function to make a distance matrix for identifying clones.
 # Downsample SNPs to speed up processing.
-interIndividualDist <- function(numgen, minMAF = 0.05, nsnp = 1e4, ploidy = 2){
-  if(nsnp > nrow(numgen)) nsnp <- nrow(numgen)
+interIndividualIBS <- function(numgen, minMAF = 0.05, nsnp = 1e4, ploidy = 2){
   freq <- rowMeans(numgen, na.rm = TRUE) / ploidy
   numgen <- numgen[freq >= minMAF,]
+  if(nsnp > nrow(numgen)) nsnp <- nrow(numgen)
   randsnp <- sample(nrow(numgen), nsnp)
-  ind_dist <- dist(t(numgen[randsnp,]))
-  return(ind_dist)
+  ind_dist <- dist(t(numgen[randsnp,]), method = "manhattan")
+  ncp <- nsnp * ploidy
+  ibs <- (ncp - ind_dist) / ncp
+  return(ibs)
 }
 
 # remove clonal individuals from dataset
-removeClones <- function(numgen, ind_dist, threshold = 10){
+removeClones <- function(numgen, ibs, threshold = 0.97){
   toremove <- c()
-  clone_index <- which(as.matrix(ind_dist) < threshold, arr.ind = TRUE)
+  clone_index <- which(as.matrix(ibs) > threshold, arr.ind = TRUE)
   clone_index <- clone_index[clone_index[,1] != clone_index[,2],]
   while(nrow(clone_index) > 0){
     thisind <- max(clone_index[,2])
