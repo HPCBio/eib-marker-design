@@ -60,8 +60,7 @@ numgen[1:10,1:10]
 
 It is good to check that there aren’t any clonal duplicates in the
 dataset, as these could bias downstream analysis. We’ll calculate
-inter-individual distances and look at the distribution of those
-distances.
+identity-by-state and look at its distribution.
 
 ``` r
 myIBS <- interIndividualIBS(numgen)
