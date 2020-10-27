@@ -66,7 +66,7 @@ distances.
 ``` r
 mydist <- interIndividualDist(numgen)
 
-hist(mydist, xlab = "Euclidian distance", main = "Histogram of inter-individual distances")
+hist(mydist, xlab = "Euclidian distance", main = "Histogram of inter-individual distances")### please I will suggest this this is based on IBS genetic distance 
 ```
 
 ![](Pedigree_verification_files/figure-gfm/inddist-1.png)<!-- -->
