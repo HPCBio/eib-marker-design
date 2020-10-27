@@ -64,25 +64,25 @@ inter-individual distances and look at the distribution of those
 distances.
 
 ``` r
-mydist <- interIndividualDist(numgen)
+myIBS <- interIndividualIBS(numgen)
 
-hist(mydist, xlab = "Euclidian distance", main = "Histogram of inter-individual distances")
+hist(myIBS, xlab = "Identity-by-state", main = "Histogram of IBS")
 ```
 
 ![](Pedigree_verification_files/figure-gfm/inddist-1.png)<!-- -->
 
 ``` r
-plot(nj(mydist), type = "unrooted", show.tip.label = FALSE)
+plot(nj(1 - myIBS), type = "unrooted", show.tip.label = FALSE)
 ```
 
 ![](Pedigree_verification_files/figure-gfm/njtree-1.png)<!-- -->
 
 Here it looks like the most closely related individuals are family
-members, not clones. If there were some values closer to zero, however,
+members, not clones. If there were some values closer to one, however,
 clones could be removed using the `removeClones` function.
 
 ``` r
-numgen <- removeClones(numgen, mydist)
+numgen <- removeClones(numgen, myIBS)
 ```
 
 ### Observed and expected heterozygosity
@@ -184,14 +184,18 @@ test the allele frequency within each genetic group. We generally want a
 variety of markers so that we have some that are variable within each
 group, and some that can distinguish groups. We’ll use the Discriminant
 Analysis of Principal Components (DAPC) protocol implemented in the
-`adegenet` package. In order to knit this document I have to set
-`n.pca`, `n.clust`, and `n.da` manually, but for your work I recommend a
-first pass where they are left as `NULL` so that you can chose them
-based on where the graphs plateau.
+`adegenet` package. In order to knit this document I have to set `n.pca`
+and `n.da` manually, but for your work I recommend a first pass where
+they are left as `NULL` so that you can chose them based on where the
+graphs plateau.
 
 ``` r
-myclust <- find.clusters(t(numgen), n.pca = 100, n.clust = 10)
+myclust <- find.clusters(t(numgen), n.pca = 100)
 ```
+
+![](Pedigree_verification_files/figure-gfm/loadclust-1.png)<!-- -->
+
+Based on the BIC graph, we’ll select ten clusters.
 
 Check the size of the groups. If it is very uneven, you may want fewer
 groups.
@@ -438,31 +442,31 @@ sort(markers_simanneal)
 How well do the markers distinguish individuals in the dataset?
 
 ``` r
-dist_purity <- interIndividualDist(numgen[markers_purity,])
+ibs_purity <- interIndividualIBS(numgen[markers_purity,])
 
-hist(dist_purity, xlab = "Euclidian distance",
-     main = "Histogram of inter-individual distances using Purity marker subset")
+hist(ibs_purity, xlab = "Identity-by-state",
+     main = "Histogram of IBS using Purity marker subset")
 ```
 
 ![](Pedigree_verification_files/figure-gfm/markerset_dist-1.png)<!-- -->
 
 ``` r
-mean(dist_purity == 0)
+mean(ibs_purity == 1)
 ```
 
     ## [1] 9.26681e-05
 
 ``` r
-dist_simanneal <- interIndividualDist(numgen[markers_simanneal,])
+ibs_simanneal <- interIndividualIBS(numgen[markers_simanneal,])
 
-hist(dist_simanneal, xlab = "Euclidian distance",
-     main = "Histogram of inter-individual distances using simulated annealing marker subset")
+hist(ibs_simanneal, xlab = "Identity-by-state",
+     main = "Histogram of IBS using simulated annealing marker subset")
 ```
 
 ![](Pedigree_verification_files/figure-gfm/markerset_dist-2.png)<!-- -->
 
 ``` r
-mean(dist_simanneal == 0)
+mean(ibs_simanneal == 1)
 ```
 
     ## [1] 0.00194603

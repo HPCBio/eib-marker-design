@@ -153,7 +153,7 @@ allele frequency within each genetic group.  We generally want a variety of
 markers so that we have some that are variable within each group, and some
 that can distinguish groups.  We'll use the Discriminant Analysis of Principal
 Components (DAPC) protocol implemented in the `adegenet` package.  In order
-to knit this document I have to set `n.pca`, `n.clust`, and `n.da` manually, but for
+to knit this document I have to set `n.pca` and `n.da` manually, but for
 your work I recommend a first pass where they are left as `NULL` so that you
 can chose them based on where the graphs plateau.
 
@@ -161,9 +161,17 @@ can chose them based on where the graphs plateau.
 set.seed(1016) # to ensure report reproducibility
 ```
 
-```{r findclusters}
-myclust <- find.clusters(t(numgen), n.pca = 100, n.clust = 10)
+```{r findclusters, eval = FALSE}
+myclust <- find.clusters(t(numgen), n.pca = 100)
 ```
+
+```{r loadclust, echo = FALSE}
+load("results/myclust.RData")
+plot(myclust$Kstat, xlab = "Number of clusters", ylab = "BIC",
+     main = "Value of BIC vs. number of clusters", type = "o", col = "blue")
+```
+
+Based on the BIC graph, we'll select ten clusters.
 
 Check the size of the groups.  If it is very uneven, you may want fewer groups.
 
