@@ -22,7 +22,7 @@ They can be installed with the following code.  It is best to run this
 installation code as soon as R is opened, before doing any other work.
 
 ```{r eval = FALSE}
-install.packages(c("tidyverse", "ape", "adegenet"))
+install.packages(c("tidyverse", "ape", "adegenet", "viridis"))
 BiocManager::install(c("VariantAnnotation", "Rsamtools"))
 ```
 

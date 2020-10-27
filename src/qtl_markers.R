@@ -30,3 +30,47 @@ LD <- function(numgen, vcf){
   names(ldlist) <- targets
   return(ldlist)
 }
+
+# Get R-squared of phenotype with markers
+# markers: a character vector naming markers of interest
+# traits: a character vector indicating which trait goes with each marker
+# traittab: a dataframe, with rows corresponding to columns of numgen,
+# containing trait values.  Column names should match traits.
+phenoCorr <- function(numgen, vcf, markers, traits, traittab,
+                      samplecol = "DRS"){
+  rr <- SummarizedExperiment::rowRanges(vcf)
+  if(is.null(rr$paramRangeID)){
+    stop("Need VCF with paramRangeID column from using GRanges to specify regions.")
+  }
+  if(!identical(rownames(numgen), names(rr))){
+    stop("Rows in numgen and vcf need to match.")
+  }
+  if(!all(traits %in% colnames(traittab))){
+    stop("Traits need to match column names")
+  }
+  if(length(markers) != length(traits)){
+    stop("markers and traits must be same length (one trait per marker).")
+  }
+  if(!all(markers %in% rr$paramRangeID)){
+    stop("Marker names not found in paramRangeID.")
+  }
+  if(is.null(traittab[[samplecol]]) ||
+     !all(traittab[[samplecol]] %in% colnames(numgen))){
+    stop("Make sure samplecol points to column with sample names, and that these match column names of numgen.")
+  }
+  numgen <- numgen[, traittab[[samplecol]]]
+  
+  corlist <- lapply(seq_along(markers),
+                    function(i){
+                      theserows <- which(rr$paramRangeID == markers[i])
+                      sapply(names(rr[theserows]),
+                      function(x){
+                        cor(traittab[[traits[i]]],
+                            numgen[x,],
+                            use = "pairwise.complete.obs", method = "pearson") ^ 2
+                      })
+                    })
+  corlist <- as(corlist, "NumericList")
+  names(corlist) <- markers
+  return(corlist)
+}

@@ -19,6 +19,8 @@ this pipeline.  First we'll load all the needed packages and functions.
 library(VariantAnnotation)
 library(Rsamtools)
 library(ggplot2)
+library(viridis)
+library(dplyr)
 source("src/marker_stats.R")
 source("src/getNumGeno.R")
 source("src/qtl_markers.R")
@@ -56,6 +58,35 @@ yam_qtl$Marker_short <- sub("_[ACGT]$", "", yam_qtl$Marker)
 head(yam_qtl)
 ```
 
+### Phenotypes
+
+We can read in phenotype data so that we can see how well SNPs predict phenotypes.
+
+```{r}
+pheno <- read.csv("data/pheno_data all 174.csv")
+head(pheno)
+```
+
+The column names should be made to match the QTL spreadsheet.
+
+```{r}
+traits <- unique(yam_qtl$Trait)
+names(pheno)
+
+names(pheno) <- gsub("_201[78]", "", names(pheno))
+names(pheno) <- gsub("_", " ", names(pheno))
+names(pheno)
+
+setdiff(traits, names(pheno))
+setdiff(names(pheno), traits)
+
+names(pheno)[names(pheno) == "Spines on tuber"] <- "Spines on tuber surface"
+names(pheno)[names(pheno) == "No of tubers"] <- "Number of tubers per plant"
+names(pheno)[names(pheno) == "Yield plant"] <- "Yield per plant"
+
+all(traits %in% names(pheno)) # should be TRUE
+```
+
 ### Genotypes and annotations from VCF
 
 We will specify ranges in which we wish to look at SNPs for KASP marker design.
@@ -66,7 +97,7 @@ search_distance <- 1e5
 qtl_ranges <- GRanges(yam_qtl$Chromosome,
                       IRanges(start = yam_qtl$Position - search_distance,
                               end = yam_qtl$Position + search_distance))
-names(qtl_ranges) <- yam_qtl$Marker
+names(qtl_ranges) <- yam_qtl$Marker_short
 ```
 
 We will import numeric genotypes just within these ranges.
@@ -77,7 +108,15 @@ str(numgen)
 ```
 
 There are 5684 markers across 173 individuals, and genotypes are coded from
-zero to two.
+zero to two.  We will change the accession names to match the phenotype spreadsheet.
+
+```{r}
+if(all(sub("_", "", colnames(numgen)) %in% pheno$DRS)){
+  colnames(numgen) <- sub("_", "", colnames(numgen))
+}
+
+all(colnames(numgen) %in% pheno$DRS) # should be TRUE
+```
 
 We will also import SNP metadata within these ranges.
 
@@ -167,19 +206,24 @@ table(yam_qtl$Nflanking)
 
 For those with three or more, we might see if there are better markers.
 
-## Finding markers in linkage disequilibrium (LD)
+## Evaluating nearby markers
+
+### Finding markers in linkage disequilibrium (LD)
 
 Below is a function that uses that information to estimate LD of every SNP
-within range with the significant SNP.
+within range with the significant SNP.  We will reorder the results to match
+the table of significant SNPs.
 
 ```{r ld}
 ld <- LD(numgen, myvcf)
+ld <- ld[yam_qtl$Marker_short]
 ```
 
 Let's also extract start positions for the sake of plotting.
 
 ```{r grangeslist}
 snplist <- split(rowRanges(myvcf), rowRanges(myvcf)$paramRangeID)
+snplist <- snplist[yam_qtl$Marker_short]
 positions <- start(snplist)
 ```
 
@@ -192,5 +236,67 @@ ggplot(mapping = aes(x = positions[[i]], y = ld[[i]])) +
 ```
 
 The actual SNP of interest shows up as 100% LD in the middle of the range.  There
-are a few nearby around 75% LD, which is not great but we might consider those if
+are a few nearby around 50% LD, which is not great but we might consider those if
 the SNP of interest is in a very low GC region, for example.
+
+### Finding markers correlating with the trait
+
+For all markers nearby to our significant SNPs, let's also look at the R-squared
+with the corresponding trait.
+
+```{r message = FALSE}
+phen_rsq <- phenoCorr(numgen, myvcf, yam_qtl$Marker_short, yam_qtl$Trait,
+                      pheno)
+phen_rsq <- phen_rsq[yam_qtl$Marker_short]
+```
+
+```{r}
+ggplot(mapping = aes(x = positions[[i]], y = phen_rsq[[i]],
+                     color = ld[[i]])) +
+  geom_point(alpha = 0.7) +
+  labs(x = "Position", y = "R-squared",
+       title = paste("Association with", yam_qtl$Trait[i]),
+       color = "LD with hit") +
+  scale_color_viridis()
+```
+
+## Choosing markers to output
+
+We may want to output a table of the best markers, along with some statistics so that
+we can manually choose among them.  Let's take the top ten R-squared values for
+association with the trait of interest.
+
+```{r}
+n <- 10 # edit this number if you want to keep a different number of markers
+
+top10 <- lapply(phen_rsq, function(x){
+  x1 <- sort(x, decreasing = TRUE)
+  if(length(x1) > n){
+    x1 <- x1[1:n]
+  }
+  return(names(x1))
+} )
+
+top10tab <- utils::stack(top10)
+colnames(top10tab) <- c("SNP_ID", "QTL")
+```
+
+Now we'll get the KASP-formatted sequence for these markers.
+
+```{r}
+outtab <- formatKasp(bigvcf, top10tab$SNP_ID, refgenome)
+outtab <- left_join(outtab, top10tab, by = "SNP_ID")
+```
+
+We'll add in linkage disequilibrium and trait association data.
+
+```{r}
+extr <- function(x, y, lst){
+  return(lst[[x]][y])
+}
+outtab$LD_with_QTL <- mapply(extr, outtab$QTL, outtab$SNP_ID, MoreArgs = list(ld))
+outtab$R2_with_trait <- mapply(extr, outtab$QTL, outtab$SNP_ID, MoreArgs = list(phen_rsq))
+### Add GC content, number of flanking SNPs
+### Make fn to identify which allele is associated with increase in trait value
+```
+
