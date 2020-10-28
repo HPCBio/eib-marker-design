@@ -62,14 +62,14 @@ head(yam_qtl)
 
 We can read in phenotype data so that we can see how well SNPs predict phenotypes.
 
-```{r}
+```{r importpheno}
 pheno <- read.csv("data/pheno_data all 174.csv")
 head(pheno)
 ```
 
 The column names should be made to match the QTL spreadsheet.
 
-```{r}
+```{r matchtraits}
 traits <- unique(yam_qtl$Trait)
 names(pheno)
 
@@ -110,7 +110,7 @@ str(numgen)
 There are 5684 markers across 173 individuals, and genotypes are coded from
 zero to two.  We will change the accession names to match the phenotype spreadsheet.
 
-```{r}
+```{r matchaccessions}
 if(all(sub("_", "", colnames(numgen)) %in% pheno$DRS)){
   colnames(numgen) <- sub("_", "", colnames(numgen))
 }
@@ -167,7 +167,7 @@ rm(temp)
 
 Lastly, we will filter the VCF to only contain SNPs in our QTL ranges.
 
-```{r}
+```{r subsetvcf}
 bigvcf <- subsetByOverlaps(bigvcf, qtl_ranges)
 ```
 
@@ -181,7 +181,7 @@ however.
 
 PCR will work best when GC content is 40-60%.
 
-```{r}
+```{r gccontent}
 yam_qtl$GCcontent <- gcContent(myvcf, yam_qtl$Marker_short, refgenome)
 
 hist(yam_qtl$GCcontent, xlab = "GC content",
@@ -196,7 +196,7 @@ SNPs in LD that have better GC content.
 A few flanking SNPs are okay, but we want to make sure none of these
 have an excessive amount.
 
-```{r}
+```{r flankingsnps}
 yam_qtl$Nflanking <- nFlankingSNPs(bigvcf, yam_qtl$Marker_short)
 
 hist(yam_qtl$Nflanking, xlab = "Number of flanking SNPs",
@@ -227,7 +227,7 @@ snplist <- snplist[yam_qtl$Marker_short]
 positions <- start(snplist)
 ```
 
-```{r}
+```{r plotld}
 i <- 1
 ggplot(mapping = aes(x = positions[[i]], y = ld[[i]])) +
   geom_point(alpha = 0.3) +
@@ -244,13 +244,13 @@ the SNP of interest is in a very low GC region, for example.
 For all markers nearby to our significant SNPs, let's also look at the R-squared
 with the corresponding trait.
 
-```{r message = FALSE}
+```{r rsq, message = FALSE}
 phen_rsq <- phenoCorr(numgen, myvcf, yam_qtl$Marker_short, yam_qtl$Trait,
-                      pheno)
+                      pheno) ^ 2
 phen_rsq <- phen_rsq[yam_qtl$Marker_short]
 ```
 
-```{r}
+```{r plotrsq}
 ggplot(mapping = aes(x = positions[[i]], y = phen_rsq[[i]],
                      color = ld[[i]])) +
   geom_point(alpha = 0.7) +
@@ -264,9 +264,10 @@ ggplot(mapping = aes(x = positions[[i]], y = phen_rsq[[i]],
 
 We may want to output a table of the best markers, along with some statistics so that
 we can manually choose among them.  Let's take the top ten R-squared values for
-association with the trait of interest.
+association with the trait of interest, and also make sure to get the significant
+SNP itself.
 
-```{r}
+```{r top10}
 n <- 10 # edit this number if you want to keep a different number of markers
 
 top10 <- lapply(phen_rsq, function(x){
@@ -275,28 +276,55 @@ top10 <- lapply(phen_rsq, function(x){
     x1 <- x1[1:n]
   }
   return(names(x1))
-} )
+} ) ### edit this to always nab the qtl
 
 top10tab <- utils::stack(top10)
 colnames(top10tab) <- c("SNP_ID", "QTL")
+
+# Add in any QTL that weren't in top 10 associated SNPs
+toadd <- setdiff(yam_qtl$Marker_short, top10tab$SNP_ID)
+top10tab <- rbind(top10tab,
+                  data.frame(SNP_ID = toadd, QTL = toadd))
+top10tab <- top10tab[order(factor(top10tab$QTL, levels = yam_qtl$Marker_short)),]
 ```
 
 Now we'll get the KASP-formatted sequence for these markers.
 
-```{r}
+```{r formatkasp}
 outtab <- formatKasp(bigvcf, top10tab$SNP_ID, refgenome)
-outtab <- left_join(outtab, top10tab, by = "SNP_ID")
+outtab <- cbind(outtab, top10tab[,"QTL", drop = FALSE])
 ```
 
-We'll add in linkage disequilibrium and trait association data.
+We'll add in linkage disequilibrium and trait association data, and also mark
+which allele was positively associated with the trait.
 
-```{r}
+```{r ldrsq, message = FALSE}
 extr <- function(x, y, lst){
   return(lst[[x]][y])
 }
 outtab$LD_with_QTL <- mapply(extr, outtab$QTL, outtab$SNP_ID, MoreArgs = list(ld))
 outtab$R2_with_trait <- mapply(extr, outtab$QTL, outtab$SNP_ID, MoreArgs = list(phen_rsq))
-### Add GC content, number of flanking SNPs
-### Make fn to identify which allele is associated with increase in trait value
+
+als <- whichAlleleList(numgen, myvcf, yam_qtl$Marker_short, yam_qtl$Trait,
+                       pheno)
+outtab$Pos_allele <- mapply(function(x, y, ...) as.character(extr(x, y, ...)), outtab$QTL, outtab$SNP_ID, MoreArgs = list(als))
+```
+
+We will also add the GC content and number of flanking SNPs.
+
+```{r gcouttab}
+outtab$GC_content <- gcContent(myvcf, outtab$SNP_ID, refgenome)
+outtab$N_flanking <- nFlankingSNPs(bigvcf, outtab$SNP_ID)
+
+head(outtab)
+```
+
+Now we have a data frame that we can export to a spreadsheet, and we can
+manually select SNPs for development as KASP markers.  I recommend selecting
+the SNP matching the QTL, plus one or two more SNPs that are similarly
+associated with the trait and have as close to optimal GC content as possible.
+
+```{r export}
+write.csv(outtab, file = "results/mas_markers.csv", row.names = FALSE)
 ```
 

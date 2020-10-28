@@ -7,3 +7,6 @@ render("Setup.Rmd",
 
 render("Pedigree_verification.Rmd", 
        output_format = github_document(toc = FALSE, html_preview = FALSE))
+
+render("Marker_assisted_selection.Rmd", 
+       output_format = github_document(toc = FALSE, html_preview = FALSE))

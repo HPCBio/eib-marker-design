@@ -31,7 +31,7 @@ LD <- function(numgen, vcf){
   return(ldlist)
 }
 
-# Get R-squared of phenotype with markers
+# Get Pearson's correlation coefficient of phenotype with markers
 # markers: a character vector naming markers of interest
 # traits: a character vector indicating which trait goes with each marker
 # traittab: a dataframe, with rows corresponding to columns of numgen,
@@ -67,10 +67,39 @@ phenoCorr <- function(numgen, vcf, markers, traits, traittab,
                       function(x){
                         cor(traittab[[traits[i]]],
                             numgen[x,],
-                            use = "pairwise.complete.obs", method = "pearson") ^ 2
+                            use = "pairwise.complete.obs", method = "pearson")
                       })
                     })
   corlist <- as(corlist, "NumericList")
   names(corlist) <- markers
   return(corlist)
+}
+
+# Determine which allele is positively associated with the trait at each SNP
+# corrval is a vector of Pearson's correlation coefficient, matching markers.
+whichAllele <- function(markers, vcf, corrval){
+  if(length(markers) != length(corrval)){
+    stop("markers and corrval must be same length")
+  }
+  rr <- SummarizedExperiment::rowRanges(vcf)
+  out <- rr[markers,]$REF
+  altfill <- rr[markers[which(corrval > 0)],]$ALT
+  if(all(lengths(altfill) == 1)){
+    altfill <- unlist(altfill)
+  } else {
+    altfill <- sapply(altfill, function(x) x[1])
+  }
+  out[which(corrval > 0)] <- altfill
+  names(out) <- markers
+  return(out)
+}
+whichAlleleList <- function(numgen, vcf, markers, traits, traittab,
+                        samplecol = "DRS"){
+  cr <- phenoCorr(numgen, vcf, markers, traits, traittab, samplecol)
+  al_list <- lapply(cr,
+                     function(cors){
+                       whichAllele(names(cors), vcf, cors)
+                     })
+  al_list <- DNAStringSetList(al_list)
+  return(al_list)
 }

@@ -16,7 +16,7 @@ best to run this installation code as soon as R is opened, before doing
 any other work.
 
 ``` r
-install.packages(c("tidyverse", "ape", "adegenet"))
+install.packages(c("tidyverse", "ape", "adegenet", "viridis"))
 BiocManager::install(c("VariantAnnotation", "Rsamtools"))
 ```
 
