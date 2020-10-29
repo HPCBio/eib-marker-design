@@ -51,3 +51,4 @@ directory is where the output will be after you run the code.
 
 * [Setup](Setup.md)
 * [Choosing markers for pedigree verification](Pedigree_verification.md)
+* [Choosing markers for marker-assisted selection](Marker_assisted_selection.md)

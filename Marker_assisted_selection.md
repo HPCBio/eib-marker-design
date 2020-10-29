@@ -15,7 +15,6 @@ library(VariantAnnotation)
 library(Rsamtools)
 library(ggplot2)
 library(viridis)
-library(dplyr)
 source("src/marker_stats.R")
 source("src/getNumGeno.R")
 source("src/qtl_markers.R")
@@ -36,8 +35,8 @@ refgenome <- FaFile("data/TDr96_F1_v2_PseudoChromosome.rev07.fasta")
 We will import a spreadsheet listing markers of interest. I reformatted
 the Excel file that was provided to make it more compatible with R.
 (I.e., deleted all header rows aside from the top one, deleted empty
-rows, merged multiple rows belonging to the same marker, listed trait in
-each row.)
+rows, merged multiple rows belonging to the same marker, and listed the
+trait in each row.)
 
 ``` r
 yam_qtl <- read.csv("data/yam_qtl.csv", stringsAsFactors = FALSE)
@@ -133,13 +132,13 @@ names(pheno)
     ## [22] "No of tubers"
 
 ``` r
-setdiff(traits, names(pheno))
+setdiff(traits, names(pheno)) # traits from the QTL file that haven't been matched in the phenotype file
 ```
 
     ## [1] "Number of tubers per plant" "Yield per plant"            "Spines on tuber surface"
 
 ``` r
-setdiff(names(pheno), traits)
+setdiff(names(pheno), traits) # traits from the phenotype file that haven't been matched in the QTL file
 ```
 
     ##  [1] "Clones"           "DRS"              "Name"             "Stem diameter"    "Yield plant"      "Spines on tuber"  "Tuber cracks"     "Tuber hairiness" 
@@ -381,19 +380,6 @@ R-squared with the corresponding trait.
 ``` r
 phen_rsq <- phenoCorr(numgen, myvcf, yam_qtl$Marker_short, yam_qtl$Trait,
                       pheno) ^ 2
-```
-
-    ## Warning in cor(traittab[[traits[i]]], numgen[x, ], use = "pairwise.complete.obs", : the standard deviation is zero
-    
-    ## Warning in cor(traittab[[traits[i]]], numgen[x, ], use = "pairwise.complete.obs", : the standard deviation is zero
-    
-    ## Warning in cor(traittab[[traits[i]]], numgen[x, ], use = "pairwise.complete.obs", : the standard deviation is zero
-    
-    ## Warning in cor(traittab[[traits[i]]], numgen[x, ], use = "pairwise.complete.obs", : the standard deviation is zero
-    
-    ## Warning in cor(traittab[[traits[i]]], numgen[x, ], use = "pairwise.complete.obs", : the standard deviation is zero
-
-``` r
 phen_rsq <- phen_rsq[yam_qtl$Marker_short]
 ```
 
@@ -425,7 +411,7 @@ top10 <- lapply(phen_rsq, function(x){
     x1 <- x1[1:n]
   }
   return(names(x1))
-} ) ### edit this to always nab the qtl
+} )
 
 top10tab <- utils::stack(top10)
 colnames(top10tab) <- c("SNP_ID", "QTL")
@@ -456,20 +442,9 @@ outtab$R2_with_trait <- mapply(extr, outtab$QTL, outtab$SNP_ID, MoreArgs = list(
 
 als <- whichAlleleList(numgen, myvcf, yam_qtl$Marker_short, yam_qtl$Trait,
                        pheno)
-```
-
-    ## Warning in cor(traittab[[traits[i]]], numgen[x, ], use = "pairwise.complete.obs", : the standard deviation is zero
-    
-    ## Warning in cor(traittab[[traits[i]]], numgen[x, ], use = "pairwise.complete.obs", : the standard deviation is zero
-    
-    ## Warning in cor(traittab[[traits[i]]], numgen[x, ], use = "pairwise.complete.obs", : the standard deviation is zero
-    
-    ## Warning in cor(traittab[[traits[i]]], numgen[x, ], use = "pairwise.complete.obs", : the standard deviation is zero
-    
-    ## Warning in cor(traittab[[traits[i]]], numgen[x, ], use = "pairwise.complete.obs", : the standard deviation is zero
-
-``` r
-outtab$Pos_allele <- mapply(function(x, y, ...) as.character(extr(x, y, ...)), outtab$QTL, outtab$SNP_ID, MoreArgs = list(als))
+als <- als[yam_qtl$Marker_short]
+outtab$Pos_allele <- mapply(function(x, y, ...) as.character(extr(x, y, ...)),
+                            outtab$QTL, outtab$SNP_ID, MoreArgs = list(als))
 ```
 
 We will also add the GC content and number of flanking SNPs.

@@ -20,7 +20,6 @@ library(VariantAnnotation)
 library(Rsamtools)
 library(ggplot2)
 library(viridis)
-library(dplyr)
 source("src/marker_stats.R")
 source("src/getNumGeno.R")
 source("src/qtl_markers.R")
@@ -41,7 +40,7 @@ refgenome <- FaFile("data/TDr96_F1_v2_PseudoChromosome.rev07.fasta")
 We will import a spreadsheet listing markers of interest.  I reformatted the
 Excel file that was provided to make it more compatible with R. (I.e., deleted
 all header rows aside from the top one, deleted empty rows, merged multiple
-rows belonging to the same marker, listed trait in each row.)
+rows belonging to the same marker, and listed the trait in each row.)
 
 ```{r qtl}
 yam_qtl <- read.csv("data/yam_qtl.csv", stringsAsFactors = FALSE)
@@ -77,8 +76,8 @@ names(pheno) <- gsub("_201[78]", "", names(pheno))
 names(pheno) <- gsub("_", " ", names(pheno))
 names(pheno)
 
-setdiff(traits, names(pheno))
-setdiff(names(pheno), traits)
+setdiff(traits, names(pheno)) # traits from the QTL file that haven't been matched in the phenotype file
+setdiff(names(pheno), traits) # traits from the phenotype file that haven't been matched in the QTL file
 
 names(pheno)[names(pheno) == "Spines on tuber"] <- "Spines on tuber surface"
 names(pheno)[names(pheno) == "No of tubers"] <- "Number of tubers per plant"
@@ -244,7 +243,7 @@ the SNP of interest is in a very low GC region, for example.
 For all markers nearby to our significant SNPs, let's also look at the R-squared
 with the corresponding trait.
 
-```{r rsq, message = FALSE}
+```{r rsq, warning = FALSE}
 phen_rsq <- phenoCorr(numgen, myvcf, yam_qtl$Marker_short, yam_qtl$Trait,
                       pheno) ^ 2
 phen_rsq <- phen_rsq[yam_qtl$Marker_short]
@@ -276,7 +275,7 @@ top10 <- lapply(phen_rsq, function(x){
     x1 <- x1[1:n]
   }
   return(names(x1))
-} ) ### edit this to always nab the qtl
+} )
 
 top10tab <- utils::stack(top10)
 colnames(top10tab) <- c("SNP_ID", "QTL")
@@ -298,7 +297,7 @@ outtab <- cbind(outtab, top10tab[,"QTL", drop = FALSE])
 We'll add in linkage disequilibrium and trait association data, and also mark
 which allele was positively associated with the trait.
 
-```{r ldrsq, message = FALSE}
+```{r ldrsq, warning = FALSE}
 extr <- function(x, y, lst){
   return(lst[[x]][y])
 }
@@ -307,7 +306,9 @@ outtab$R2_with_trait <- mapply(extr, outtab$QTL, outtab$SNP_ID, MoreArgs = list(
 
 als <- whichAlleleList(numgen, myvcf, yam_qtl$Marker_short, yam_qtl$Trait,
                        pheno)
-outtab$Pos_allele <- mapply(function(x, y, ...) as.character(extr(x, y, ...)), outtab$QTL, outtab$SNP_ID, MoreArgs = list(als))
+als <- als[yam_qtl$Marker_short]
+outtab$Pos_allele <- mapply(function(x, y, ...) as.character(extr(x, y, ...)),
+                            outtab$QTL, outtab$SNP_ID, MoreArgs = list(als))
 ```
 
 We will also add the GC content and number of flanking SNPs.
