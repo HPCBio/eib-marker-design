@@ -31,7 +31,7 @@ fixTasselNames <- function(x){
 }
 
 # Function to get a GRanges object from a VCF, but with the names corrected.
-rowRanges_correctedSeqnames <- function(rr, markers = rownames(vcf),
+rowRanges_correctedSeqnames <- function(rr, markers = rownames(rr),
                                         fixfn = fixTasselNames){
   rr1 <- GenomicRanges::GRanges(fixfn(GenomeInfoDb::seqnames(rr)),
                                 IRanges::ranges(rr))
