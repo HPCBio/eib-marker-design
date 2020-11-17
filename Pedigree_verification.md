@@ -456,6 +456,12 @@ mean(ibs_purity == 1)
     ## [1] 9.26681e-05
 
 ``` r
+propUnique(numgen[markers_purity,])
+```
+
+    ## [1] 0.9696049
+
+``` r
 ibs_simanneal <- interIndividualIBS(numgen[markers_simanneal,])
 
 hist(ibs_simanneal, xlab = "Identity-by-state",
@@ -470,11 +476,19 @@ mean(ibs_simanneal == 1)
 
     ## [1] 0.00194603
 
+``` r
+propUnique(numgen[markers_simanneal,])
+```
+
+    ## [1] 0.7902736
+
 If two individuals were selected at random, there is a 0.2% chance that
 they would have identical genotypes across all markers using the
 simulated annealing algorithm, as opposed to a 0.01% chance using
-markers from the Purity algorithm. So, the Purity algorithm is somewhat
-better for distinguishing individuals.
+markers from the Purity algorithm. This corresponds to 75% of the
+individuals being unique with the simulated annealing set and 97% of
+individuals being unique with the Purity set. So, the Purity algorithm
+is somewhat better for distinguishing individuals.
 
 We can also compare the geometric mean of expected heterozygosity in all
 of the populations.
@@ -538,3 +552,81 @@ write.csv(markerseq1, file = "results/pedigree_verification_markers_Purity.csv",
 write.csv(markerseq2, file = "results/pedigree_verification_markers_simanneal.csv",
           row.names = FALSE)
 ```
+
+## Curve to determine optimal number of markers
+
+An additional analysis was performed where the number of markers in the
+dataset was varied, in order to determine the optimal number of markers.
+
+``` r
+markers_purity10 <- read.delim("results/Galaxy11-[Purity_(beta)_on_data_8].tabular")$Name[1:10]
+markers_purity20 <- read.delim("results/Galaxy13-[Purity_(beta)_on_data_8].tabular")$Name[1:20]
+markers_purity30 <- read.delim("results/Galaxy15-[Purity_(beta)_on_data_8].tabular")$Name[1:30]
+markers_purity40 <- read.delim("results/Galaxy17-[Purity_(beta)_on_data_8].tabular")$Name[1:40]
+markers_purity75 <- read.delim("results/Galaxy19-[Purity_(beta)_on_data_8].tabular")$Name[1:75]
+markers_purity100 <- read.delim("results/Galaxy21-[Purity_(beta)_on_data_8].tabular")$Name[1:100]
+
+markers_purity_list <- list(markers_purity10, markers_purity20, markers_purity30, markers_purity40,
+                            markers_purity, markers_purity75, markers_purity100)
+
+curve_df_purity <- data.frame(N_markers = lengths(markers_purity_list),
+                              Prop_unique = sapply(markers_purity_list,
+                                                   function(x) propUnique(numgen[x,])),
+                              DiffScore = sapply(markers_purity_list,
+                                                    function(x) DiffScore(grp_alfreq[x,])),
+                              DivScore = sapply(markers_purity_list,
+                                                    function(x) DivScore(grp_alfreq[x,])))
+```
+
+``` r
+set.seed(1117)
+markers_simanneal_list <- lapply(c(10, 20, 30, 40, 50, 75, 100),
+                                 function(x) findMarkerSet(grp_alfreq[rownames(snpdf3),], nSNP = x)$Set)
+
+curve_df_simanneal <- data.frame(N_markers = lengths(markers_simanneal_list),
+                                 Prop_unique = sapply(markers_simanneal_list,
+                                                   function(x) propUnique(numgen[x,])),
+                                 DiffScore = sapply(markers_simanneal_list,
+                                                    function(x) DiffScore(grp_alfreq[x,])),
+                                 DivScore = sapply(markers_simanneal_list,
+                                                    function(x) DivScore(grp_alfreq[x,])))
+save(markers_simanneal_list, curve_df_simanneal, file = "results/simanneal_curve.RData")
+```
+
+``` r
+curve_df_purity$Method <- "Purity"
+curve_df_simanneal$Method <- "Simulated annealing"
+curve_df_comb <- rbind(curve_df_purity, curve_df_simanneal)
+
+ggplot(curve_df_comb, aes(x = N_markers, y = Prop_unique, color = Method)) +
+  geom_line()
+```
+
+![](Pedigree_verification_files/figure-gfm/unnamed-chunk-40-1.png)<!-- -->
+
+With 75 or 100 markers, all accessions could be distinguished using
+markers selected with the Purity method. The simulated annealing method
+still only distinguished 88% of accessions with 100 markers, as it was
+trying to optimize diversity rather than identification of accessions.
+
+``` r
+ggplot(curve_df_comb, aes(x = N_markers, y = DiffScore, color = Method)) +
+  geom_line()
+```
+
+![](Pedigree_verification_files/figure-gfm/unnamed-chunk-41-1.png)<!-- -->
+
+The simulated annealing algorithm was better than the Purity method at
+differentiating populations. The number of markers included did not have
+much of an impact on either method.
+
+``` r
+ggplot(curve_df_comb, aes(x = N_markers, y = DivScore, color = Method)) +
+  geom_line()
+```
+
+![](Pedigree_verification_files/figure-gfm/unnamed-chunk-42-1.png)<!-- -->
+
+As the number of markers increased, the Purity method captured more
+diversity within populations, although not as much as the simulated
+annealing method.

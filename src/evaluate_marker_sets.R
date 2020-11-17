@@ -136,3 +136,11 @@ findMarkerSet <- function(freqmat, nSNP = 20,
               Temperatures = temps_used[1:i],
               Scores = scores_by_round[1:i]))
 }
+
+## Determine the proportion of genotypes that are unique with a given set of markers
+propUnique <- function(numgen){
+  dup1 <- duplicated(numgen, MARGIN = 2)
+  dup2 <- duplicated(numgen, MARGIN = 2, fromLast = TRUE)
+  
+  return(mean(!dup1 & !dup2))
+}
