@@ -97,6 +97,7 @@ qtl_ranges <- GRanges(yam_qtl$Chromosome,
                       IRanges(start = yam_qtl$Position - search_distance,
                               end = yam_qtl$Position + search_distance))
 names(qtl_ranges) <- yam_qtl$Marker_short
+qtl_ranges$Trait <- yam_qtl$Trait
 ```
 
 We will import numeric genotypes just within these ranges.
@@ -292,6 +293,12 @@ Now we'll get the KASP-formatted sequence for these markers.
 ```{r formatkasp}
 outtab <- formatKasp(bigvcf, top10tab$SNP_ID, refgenome)
 outtab <- cbind(outtab, top10tab[,"QTL", drop = FALSE])
+```
+
+We'll add the trait name for each QTL.
+
+```{r qtltrait}
+outtab$Trait <- yam_qtl$Trait[match(outtab$QTL, yam_qtl$Marker_short)]
 ```
 
 We'll add in linkage disequilibrium and trait association data, and also mark

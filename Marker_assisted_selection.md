@@ -165,6 +165,7 @@ qtl_ranges <- GRanges(yam_qtl$Chromosome,
                       IRanges(start = yam_qtl$Position - search_distance,
                               end = yam_qtl$Position + search_distance))
 names(qtl_ranges) <- yam_qtl$Marker_short
+qtl_ranges$Trait <- yam_qtl$Trait
 ```
 
 We will import numeric genotypes just within these ranges.
@@ -430,6 +431,12 @@ outtab <- formatKasp(bigvcf, top10tab$SNP_ID, refgenome)
 outtab <- cbind(outtab, top10tab[,"QTL", drop = FALSE])
 ```
 
+We’ll add the trait name for each QTL.
+
+``` r
+outtab$Trait <- yam_qtl$Trait[match(outtab$QTL, yam_qtl$Marker_short)]
+```
+
 We’ll add in linkage disequilibrium and trait association data, and also
 mark which allele was positively associated with the trait.
 
@@ -456,20 +463,20 @@ outtab$N_flanking <- nFlankingSNPs(bigvcf, outtab$SNP_ID)
 head(outtab)
 ```
 
-    ##            SNP_ID                                                                                                Sequence             QTL  LD_with_QTL R2_with_trait
-    ## 1 chrom_03_927345 GATGGCGATGAAAACCAAATACCCGAATTTTATATTCAAAATCGTGTGCT[Y]GTTTATTTAGCTAAWTTTTTTAACACCCAATAATTTTTTGCCTACTGAGG chrom_03_880906 0.0002381184    0.08001374
-    ## 2 chrom_03_808627 GACCCYGCCACTTCCCGCATTGTTGCCACCGGATCCGTCTTCATTGAGAA[R]AAGTTCATCCRRGGTTGCTCCAGTGTCGGCCACATCGAGGACGTCGTTGT chrom_03_880906 0.0662708530    0.06937250
-    ## 3 chrom_03_857437 GAAAAATCATAGACTCACAGTTAWCCGTAAAAAAAATTCTAAAACTTTCT[W]TAAAAAAATCTCTTGAATCTAAAATAGAAAGCAAACCTTCTCTGTCAAAA chrom_03_880906 0.1269848845    0.06712568
-    ## 4 chrom_03_818630 ACTAAATATAATATTTAGGACTATCATTTTCAAATGGCTTATTTGTTCCT[R]AATGATTAATTTTTTGATAATTATTTATATTTGGCTTACTAATTAATATT chrom_03_880906 0.5718231650    0.06656723
-    ## 5 chrom_03_859550 TACATTCACTCYATGGAAAGATCACAAAAAATGAAGTAATGCACACACAM[M]CACGCTAGATCATACACATTTGGCAAAACTCAATAGTTCTACTACCCTAA chrom_03_880906 0.6119078637    0.06512163
-    ## 6 chrom_03_928653 CTTGCACATGCTATTGTTGAGCCAAATAGAAAATTCCATAAAAGCCCTTC[M]WTTCCATTCCATTGCTTGTATCCCTCCTCCGCCGCCTCCTTGCTCCTCYT chrom_03_880906 0.0625232930    0.06184332
-    ##   Pos_allele GC_content N_flanking
-    ## 1          C  0.3267327          1
-    ## 2          A  0.5643564          3
-    ## 3          A  0.2574257          1
-    ## 4          A  0.1881188          0
-    ## 5          C  0.3663366          2
-    ## 6          C  0.4752475          2
+    ##            SNP_ID                                                                                                Sequence             QTL        Trait  LD_with_QTL
+    ## 1 chrom_03_927345 GATGGCGATGAAAACCAAATACCCGAATTTTATATTCAAAATCGTGTGCT[Y]GTTTATTTAGCTAAWTTTTTTAACACCCAATAATTTTTTGCCTACTGAGG chrom_03_880906 Plant vigour 0.0002381184
+    ## 2 chrom_03_808627 GACCCYGCCACTTCCCGCATTGTTGCCACCGGATCCGTCTTCATTGAGAA[R]AAGTTCATCCRRGGTTGCTCCAGTGTCGGCCACATCGAGGACGTCGTTGT chrom_03_880906 Plant vigour 0.0662708530
+    ## 3 chrom_03_857437 GAAAAATCATAGACTCACAGTTAWCCGTAAAAAAAATTCTAAAACTTTCT[W]TAAAAAAATCTCTTGAATCTAAAATAGAAAGCAAACCTTCTCTGTCAAAA chrom_03_880906 Plant vigour 0.1269848845
+    ## 4 chrom_03_818630 ACTAAATATAATATTTAGGACTATCATTTTCAAATGGCTTATTTGTTCCT[R]AATGATTAATTTTTTGATAATTATTTATATTTGGCTTACTAATTAATATT chrom_03_880906 Plant vigour 0.5718231650
+    ## 5 chrom_03_859550 TACATTCACTCYATGGAAAGATCACAAAAAATGAAGTAATGCACACACAM[M]CACGCTAGATCATACACATTTGGCAAAACTCAATAGTTCTACTACCCTAA chrom_03_880906 Plant vigour 0.6119078637
+    ## 6 chrom_03_928653 CTTGCACATGCTATTGTTGAGCCAAATAGAAAATTCCATAAAAGCCCTTC[M]WTTCCATTCCATTGCTTGTATCCCTCCTCCGCCGCCTCCTTGCTCCTCYT chrom_03_880906 Plant vigour 0.0625232930
+    ##   R2_with_trait Pos_allele GC_content N_flanking
+    ## 1    0.08001374          C  0.3267327          1
+    ## 2    0.06937250          A  0.5643564          3
+    ## 3    0.06712568          A  0.2574257          1
+    ## 4    0.06656723          A  0.1881188          0
+    ## 5    0.06512163          C  0.3663366          2
+    ## 6    0.06184332          C  0.4752475          2
 
 Now we have a data frame that we can export to a spreadsheet, and we can
 manually select SNPs for development as KASP markers. I recommend
