@@ -29,9 +29,22 @@ source("src/getNumGeno.R")
 source("src/qtl_markers.R")
 ```
 
+### Reference genome
+
+Here we'll load the reference genome sequence for maize.  This was
+already indexed using `indexFa` (see the setup steps).
+
+The genome was obtained from https://download.maizegdb.org/Zm-B73-REFERENCE-GRAMENE-4.0/
+
+```{r refgenome}
+refgenome <- FaFile("data/Zm-B73-REFERENCE-GRAMENE-4.0.fasta")
+```
+
 ### SNP positions from sequence
 
 A spreadsheet was provided listing the markers of interest and their GBS tags.
+Previous analysis indicated that many SNP positions were incorrect, so we will
+attempt to determine the correct positions by sequence alignment.
 
 ```{r readqtl}
 maize_qtl <- read.csv("data/Markers identified from QTL or GWAS studies with sequences - Latest - LVC edits.csv",
@@ -75,7 +88,7 @@ maize_qtl$N_blast_hits <- as.integer(sub("# ", "", sub(" hits found", "", grep("
 
 We will identify the SNP position for each top hit where possible.
 
-```{r}
+```{r eval = FALSE}
 query_lines <- grep("^# Query:", blast_lines, value = TRUE)
 tophit_lines <- blast_lines[grep("hits found", blast_lines) + 1]
 tophit_lines[startsWith(tophit_lines, "#")] <- NA
@@ -103,6 +116,8 @@ maize_qtl$Blast_pos[!is.na(tophit_lines)] <-
              return(maize_blast$s.start[i] - snp_pad + maize_blast$q.start[i] - 1L)
            }
          })
+maize_qtl$Blast_strand[!is.na(tophit_lines)] <-
+  ifelse(maize_blast$s.end > maize_blast$s.start, "top", "bot")
 ```
 
 For a few of them, SNP position could not be determined due to gap openings.  Those
@@ -137,6 +152,7 @@ One had the wrong chromosome, so I'll manually correct it.
 ```{r}
 maize_qtl$Blast_pos[match("S1_51819212", maize_qtl$QTL.marker)] <- 51819243L
 maize_qtl$Blast_chrom[match("S1_51819212", maize_qtl$QTL.marker)] <- "Chr1"
+maize_qtl$Blast_strand[match("S1_51819212", maize_qtl$QTL.marker)] <- "bot"
 ```
 
 #### Bowtie2
@@ -198,6 +214,13 @@ maize_qtl$Bowtie_pos <- sapply(seq_len(nrow(maize_qtl)),
                                  snppos_sam(snp_pad, samsplit[[i]][4], samsplit[[i]][2],
                                             samsplit[[i]][6])
                                })
+
+maize_qtl$Bowtie_strand <- sapply(samsplit,
+                                  function(x){
+                                    if(x[2] == "0") return("top")
+                                    if(x[2] == "16") return("bot")
+                                    if(x[2] == "4") return(NA_character_)
+                                  })
 ```
 
 The only places where Bowtie2 found a different position from BLAST were cases
@@ -216,22 +239,115 @@ maize_qtl[is.na(maize_qtl$Blast_pos),
           c("QTL.marker", "Chrom", "Chrom.Pos", "Blast_chrom", "Blast_pos", "Bowtie_chrom", "Bowtie_pos")]
 ```
 
-### Pairwise alignments based on supplied positions
+Let's start columns to store the final chromosome and position that we will use
+after comparing both alignments.
 
 ```{r}
-maize_qtl[-which(maize_qtl$Blast_chrom == paste0("Chr", maize_qtl$Chrom) | maize_qtl$Bowtie_chrom == paste0("Chr", maize_qtl$Chrom)),]
+maize_qtl$Final_chrom <- maize_qtl$Blast_chrom
+maize_qtl$Final_pos <- maize_qtl$Blast_pos
+maize_qtl$Final_strand <- maize_qtl$Blast_strand
+bad_blast <- which(is.na(maize_qtl$Blast_chrom) |
+                     (maize_qtl$Blast_chrom != paste0("Chr", maize_qtl$Chrom) &
+                        maize_qtl$Blast_pos != maize_qtl$Chrom.Pos))
+bad_blast
+maize_qtl$Final_chrom[bad_blast] <- NA
+maize_qtl$Final_pos[bad_blast] <- NA
+maize_qtl$Final_strand[bad_blast] <- NA
+good_bowtie <- which(!is.na(maize_qtl$Bowtie_chrom) &
+                       (maize_qtl$Bowtie_chrom == paste0("Chr", maize_qtl$Chrom) |
+                        maize_qtl$Bowtie_pos == maize_qtl$Chrom.Pos))
+bowtie_fill <- good_bowtie[good_bowtie %in% bad_blast]
+
+maize_qtl$Final_chrom[bowtie_fill] <- maize_qtl$Bowtie_chrom[bowtie_fill]
+maize_qtl$Final_pos[bowtie_fill] <- maize_qtl$Bowtie_pos[bowtie_fill]
+maize_qtl$Final_strand[bowtie_fill] <- maize_qtl$Bowtie_strand[bowtie_fill]
 ```
 
-### Reference genome
+#### Pairwise alignments based on supplied positions
 
-Here we'll load the reference genome sequence for maize.  You should have
-already indexed it using `indexFa` (see the setup steps).
+Below is a list of markers where the chromosomes identified by neither BLAST
+nor Bowtie match the supplied chromosome.  We'll try one more approach to align
+them.
 
-The genome was obtained from https://download.maizegdb.org/Zm-B73-REFERENCE-GRAMENE-4.0/
+```{r}
+to_fill <- which(is.na(maize_qtl$Final_chrom))
+maize_qtl[to_fill,
+          c("QTL.marker", "Chrom", "Chrom.Pos", "Blast_chrom", "Blast_pos", "Bowtie_chrom", "Bowtie_pos", "Seq.consensus")]
+```
 
-```{r refgenome}
-refgenome <- FaFile("data/Zm-B73-REFERENCE-GRAMENE-4.0.fasta")
-#refgenome <- FaFile("data/Zm-B73-REFERENCE-NAM-5.0.fa")
+Given that other SNPs were off in position by up to 80 nt, and the tags
+are 69 nt long, we will search sequence 200 nt on either side of each SNP
+position.
+
+```{r}
+remaining_snps <- GRanges(paste0("Chr", maize_qtl$Chrom[to_fill]),
+                          IRanges(start = maize_qtl$Chrom.Pos[to_fill],
+                                  width = 1))
+names(remaining_snps) <- maize_qtl$QTL.marker[to_fill]
+remaining_snps_flank <- flank(remaining_snps, width = 200, both = TRUE)
+remaining_snps_flank_seq <- scanFa(refgenome, remaining_snps_flank)
+```
+
+We'll do the alignment using the Biostrings package.
+
+```{r}
+aligns_forward <- aligns_reverse <- vector(mode = "list", length = 4)
+best_align <- character(4)
+
+for(i in 1:4){
+  thistag <- DNAString(maize_qtl$Seq.consensus[match(names(remaining_snps)[i], maize_qtl$QTL.marker)])
+  aligns_forward[[i]] <- pairwiseAlignment(thistag, remaining_snps_flank_seq[i],
+                          substitutionMatrix = nucleotideSubstitutionMatrix(),
+                          type = "local", gapOpening = 2, gapExtension = 2)
+  aligns_reverse[[i]] <- pairwiseAlignment(reverseComplement(thistag), remaining_snps_flank_seq[i],
+                          substitutionMatrix = nucleotideSubstitutionMatrix(),
+                          type = "local", gapOpening = 2, gapExtension = 2)
+  if(score(aligns_forward[[i]]) > score(aligns_reverse[[i]])){
+    best_align[i] <- "top"
+  } else {
+    best_align[i] <- "bot"
+  }
+}
+```
+
+We can examine the output alignments.
+
+```{r}
+best_align
+
+aligns_reverse[[1]]
+aligns_forward[[2]]
+aligns_reverse[[3]]
+aligns_forward[[4]]
+```
+
+Now we can calculate SNP positions.
+
+```{r}
+maize_qtl$SNP.Position[to_fill]
+
+maize_qtl$Final_pos[to_fill[1]] <- start(remaining_snps_flank)[1] + 188L - 1L + 69L - 15L - 1L
+maize_qtl$Final_pos[to_fill[2]] <- start(remaining_snps_flank)[2] + 181L - 1L + 20L
+maize_qtl$Final_pos[to_fill[3]] <- start(remaining_snps_flank)[3] + 161L - 1L + 69L - 44L - 1L
+maize_qtl$Final_pos[to_fill[4]] <- start(remaining_snps_flank)[4] + 176L - 1L + 25L
+
+maize_qtl$Final_chrom[to_fill] <- as.character(seqnames(remaining_snps))
+maize_qtl$Final_strand[to_fill] <- best_align
+```
+
+Checking the results:
+
+```{r}
+maize_qtl[to_fill,
+          c("QTL.marker", "Chrom", "Chrom.Pos", "Final_chrom", "Final_pos")]
+```
+
+As with the rest of the markers, some of the positions match and some don't.
+
+Now I will save all of my positions to a CSV file.
+
+```{r eval = FALSE}
+write.csv(maize_qtl, file = "results/maize_qtl_positions_corrected.csv")
 ```
 
 ### Public HapMap VCFs for maize
