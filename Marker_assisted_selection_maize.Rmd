@@ -714,6 +714,6 @@ maize_qtl$KASP_string_alt[altrows] <- kasp_strings_alt$Sequence
 Finally, we'll export to CSV.
 
 ```{r eval = FALSE}
-write.csv(maize_qtl, file = "maize_qtl_kasp_design_2021-04-08.csv", row.names = FALSE)
+write.csv(maize_qtl, file = "results/maize_qtl_kasp_design_2021-04-08.csv", row.names = FALSE)
 ```
 
