@@ -628,7 +628,7 @@ betterMarker("S3_143135226")  # use 3-142270994
 betterMarker("S1_102219796")  # keep original
 betterMarker("S3_168085123")  # keep original
 betterMarker("S3_144672580")  # keep original
-betterMarker("S1_219230116")  # use 1-216107167
+betterMarker("S1_219230116")  # keep original; 1-216107167 is an insertion
 betterMarker("S1_17612352")   # use 1-17281449
 betterMarker("S5_203246920")  # use 5-198031485
 betterMarker("S7_158457623")  # use 7-153071765
@@ -638,10 +638,11 @@ betterMarker("S1_51819212")   # keep original
 betterMarker("S5_77117962")   # keep original
 
 maize_qtl$Alt_marker <- NA_character_
-maize_qtl$Alt_marker[match(c("S10_16561261", "S10_112661493", "S3_143135226", "S1_219230116", "S1_17612352", "S5_203246920", "S7_158457623", "S2_229069973"),
+maize_qtl$Alt_marker[match(c("S10_16561261", "S10_112661493", "S3_143135226", "S1_17612352", "S5_203246920", "S7_158457623", "S2_229069973"),
                            maize_qtl$QTL.marker)] <-
-                           c( "10-16329120",  "10-111797724",  "3-142270994",  "1-216107167",  "1-17281449",  "5-198031485",  "7-153071765",  "2-222755051")
+                           c( "10-16329120",  "10-111797724",  "3-142270994",  "1-17281449",  "5-198031485",  "7-153071765",  "2-222755051")
 altrows <- which(!is.na(maize_qtl$Alt_marker))
+maize_qtl$Alt_pos <- NA_integer_
 maize_qtl$Alt_pos[altrows] <- start(vcf_ranges[maize_qtl$Alt_marker[altrows]])
 maize_qtl$Alt_GCcontent <- NA_real_
 maize_qtl$Alt_Nflanking <- NA_integer_
@@ -661,5 +662,58 @@ maize_qtl$Alt_Nflanking[altrows] <-
 
 ## Formatting sequences for KASP
 
+I'll modify a previously written function to format sequences for KASP,
+since we aren't starting directly from VCF.
 
+```{r}
+# Function to format SNPs for KASP assay, annotating flanking SNPs.
+formatKasp2 <- function(rr, rr2, refgenome, allele1, allele2,
+                        strand = rep("top", length(rr2)), flanking_bp = 50){
+
+  seq <- Rsamtools::scanFa(refgenome, rr2, as = "DNAStringSet")
+  fo <- GenomicRanges::findOverlaps(rr2, rr, type = "any")
+  kaspstart <- BiocGenerics::start(rr2)
+  for(i in seq_along(rr2)){
+    toshift <- kaspstart[i] - 1
+    theseSNPs <- rr[S4Vectors::subjectHits(fo)[S4Vectors::queryHits(fo) == i]]
+    pos <- BiocGenerics::start(theseSNPs) - toshift
+    alts <- lapply(theseSNPs$ALT,
+                   function(x) paste(x[x %in% c("A", "C", "G", "T")], collapse = ""))
+    ambig <- Biostrings::mergeIUPACLetters(paste0(theseSNPs$REF, alts))
+    seq[[i]] <- Biostrings::replaceLetterAt(seq[[i]], pos, ambig)
+  }
+  seq[strand == "bot"] <- reverseComplement(seq[strand == "bot"])
+  outstrings <- paste0(XVector::subseq(seq, start = 1, width = flanking_bp),
+                       "[",
+                       allele1, "/", allele2,
+                       "]",
+                       XVector::subseq(seq, start = flanking_bp + 2, width = flanking_bp))
+  return(data.frame(SNP_ID = names(rr2),
+                    Sequence = outstrings,
+                    stringsAsFactors = FALSE))
+}
+
+names(qtl_kasp_ranges) <- maize_qtl$QTL.marker
+
+kasp_strings_orig <- formatKasp2(vcf_ranges_filt, qtl_kasp_ranges, refgenome,
+                                 substring(maize_qtl$Allele, 1, 1),
+                                 substring(maize_qtl$Allele, 3, 3),
+                                 maize_qtl$Final_strand)
+
+alt_ranges <- vcf_ranges[maize_qtl$Alt_marker[altrows]]
+kasp_ranges_alt <- getKaspRange(alt_ranges)
+
+kasp_strings_alt <- formatKasp2(vcf_ranges_filt, kasp_ranges_alt, refgenome,
+                                alt_ranges$REF, unlist(alt_ranges$ALT))
+
+maize_qtl$KASP_string <- kasp_strings_orig$Sequence
+maize_qtl$KASP_string_alt <- ""
+maize_qtl$KASP_string_alt[altrows] <- kasp_strings_alt$Sequence
+```
+
+Finally, we'll export to CSV.
+
+```{r eval = FALSE}
+write.csv(maize_qtl, file = "maize_qtl_kasp_design_2021-04-08.csv", row.names = FALSE)
+```
 
