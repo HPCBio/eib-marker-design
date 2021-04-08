@@ -350,6 +350,13 @@ Now I will save all of my positions to a CSV file.
 write.csv(maize_qtl, file = "results/maize_qtl_positions_corrected.csv")
 ```
 
+To reload without having to run the above code:
+
+```{r eval = FALSE}
+maize_qtl <- read.csv("results/maize_qtl_positions_corrected.csv",
+                      row.names = 1)
+```
+
 ### Public HapMap VCFs for maize
 
 In order to annotate more flanking SNPs than were provided in the original
@@ -369,14 +376,10 @@ names in the reference genome are formatted as "Chr1" whereas chromosome names
 in the public VCFs are formatted as "1".
 
 ```{r qtl_ranges}
-
-
-head(maize_qtl)
-
 search_distance <- 1e5
-qtl_ranges <- GRanges(maize_qtl$Chrom,
-                      IRanges(start = maize_qtl$Position - search_distance,
-                              end = maize_qtl$Position + search_distance))
+qtl_ranges <- GRanges(maize_qtl$Final_chrom,
+                      IRanges(start = maize_qtl$Final_pos - search_distance,
+                              end = maize_qtl$Final_pos + search_distance))
 names(qtl_ranges) <- maize_qtl$QTL.marker
 ```
 
@@ -407,243 +410,71 @@ load("results/vcflist.RData")
 ```
 
 We should do QC to make sure the reference genome sequence matches what is
-listed in the VCF. We'll check chromosome 1.
+listed in the VCF.
 
 ```{r}
-ranges1 <- rowRanges_correctedSeqnames(vcflist[[1]],
-                                       fixfn = function(x){
-                                         paste0("Chr", x)
+refcheck_public <- sapply(vcflist,
+                   function(x){
+                     ranges1 <- rowRanges_correctedSeqnames(x,
+                                       fixfn = function(i){
+                                         paste0("Chr", i)
                                        })
-ranges1
-
-refcheck1 <- scanFa(refgenome, ranges1)
-refcheck1
-
-mean(refcheck1 == ranges1$REF) # should be 1
-```
-
-Are the SNPs of interest in the public VCF?  If so, we don't need the study-specific
-VCFs.
-
-```{r}
-maize_qtl$Public <- FALSE
-maize_qtl$PublicV3 <- FALSE
-for(i in seq_len(nrow(maize_qtl))){
-  #qtl <- maize_qtl$QTL.marker[i] # could match to paramRangeID
-  chrom <- as.integer(sub("Chr", "", maize_qtl$Chrom[i]))
-  pos <- maize_qtl$Position[i]
-  maize_qtl$Public[i] <- pos %in% start(vcflist[[chrom]])
-  maize_qtl$PublicV3[i] <- paste(chrom, pos, sep = "-") %in% rownames(vcflist[[chrom]])
-}
-
-mean(maize_qtl$Public)
-mean(maize_qtl$PublicV3)
-```
-
-No, the majority are not in the public VCFs.
-
-### Study-specific VCFs
-
-Below are names of the VCFs from the GWAS and QTL studies.  We'll zip and
-index them for reading.
-
-```{r files, eval = FALSE}
-small_vcfs <- paste0("data/", c("GWAS", "EEWQTL_new", "EEYQTL_new", "EWQTL"), ".vcf")
-for(v in small_vcfs){
-  b <- bgzip(v)
-  indexTabix(b, format = "vcf")
-}
-```
-
-```{r}
-bgzs <- paste0("data/", c("GWAS", "EEWQTL_new", "EEYQTL_new", "EWQTL"), ".vcf.bgz")
-names(bgzs) <- c("GWAS", "EEWQTL", "EEYQTL", "EWQTL")
-```
-
-```{r}
-small_vcf_list <- sapply(bgzs, function(x) readVcf(x, param = ScanVcfParam(geno = NA)))
-```
-
-```{r}
-ranges2 <- sapply(small_vcf_list, 
-                  function(x) rowRanges_correctedSeqnames(x,
-                                       fixfn = function(x){
-                                         paste0("Chr", x)
-                                       }))
-# subset chromosomes because there is some bug
-# ranges2 <- sapply(ranges2,
-#                   function(x) x[seqnames(x) %in% paste0("chr", 1:9)])
-
-refcheck2 <- sapply(ranges2, function(x) scanFa(refgenome, x))
-
-mean(refcheck2[[1]] == ranges2[[1]]$REF | refcheck2[[1]] == unlist(ranges2[[1]]$ALT))
-mean(refcheck2[[2]] == ranges2[[2]]$REF | refcheck2[[2]] == unlist(ranges2[[2]]$ALT))
-mean(refcheck2[[3]] == ranges2[[3]]$REF | refcheck2[[3]] == unlist(ranges2[[3]]$ALT))
-mean(refcheck2[[4]] == ranges2[[4]]$REF | refcheck2[[4]] == unlist(ranges2[[4]]$ALT))
-
-ranges2[[2]][!(refcheck2[[2]] == ranges2[[2]]$REF | refcheck2[[2]] == unlist(ranges2[[2]]$ALT))]
-```
-
-```{r}
-test <- sub(".*-", "", names(ranges2[[1]]))
-test <- as.integer(sub(":[ACGT]>[ACGT]$", "", test))
-hist(test)
-summary(test)
-
-ranges2a <- sapply(ranges2[c(1, 3, 4)],
-                   function(x){
-                     pad <- as.integer(sub(":[ACGT]>[ACGT]$", "", sub(".*-", "", names(x))))
-                     GRanges(seqnames = seqnames(x),
-                             IRanges(start = start(x) + pad - 0,
-                                     end = start(x) + pad - 0))
-                   }) # 
-refcheck2a <- sapply(ranges2a, function(x) scanFa(refgenome, x))
-
-ranges2b <- sapply(ranges2[c(1, 3, 4)],
-                   function(x){
-                     pad <- as.integer(sub(":[ACGT]>[ACGT]$", "", sub(".*-", "", names(x))))
-                     GRanges(seqnames = seqnames(x),
-                             IRanges(start = start(x) - pad + 68,
-                                     end = start(x) - pad + 68))
+                     refcheck1 <- scanFa(refgenome, ranges1)
+                     return(mean(refcheck1 == ranges1$REF))
                    })
-refcheck2b <- sapply(ranges2b, function(x) scanFa(refgenome, x))
-
-mean(refcheck2a[[1]] == ranges2[[1]]$REF |
-       refcheck2b[[1]] == ranges2[[1]]$REF)
+all(refcheck_public == 1) # TRUE if all reference alleles match reference
 ```
 
+Are the SNPs of interest in the public VCF?
 
-## Data import
-
-### Significant SNPs
-
-We will import a spreadsheet listing markers of interest.  I reformatted the
-Excel file that was provided to make it more compatible with R. (I.e., deleted
-all header rows aside from the top one, deleted empty rows, merged multiple
-rows belonging to the same marker, and listed the trait in each row.)
-
-```{r qtl}
-yam_qtl <- read.csv("data/yam_qtl.csv", stringsAsFactors = FALSE)
-
-str(yam_qtl)
-```
-
-We will make a chromosome column to match the chromosome names in the FASTA and
-VCF files.  We'll also make a marker name column with the allele trimmed off.
-
-```{r qtlchr}
-yam_qtl$Chromosome <- sub("_[[:digit:]]+_[ACGT]$", "", yam_qtl$Marker)
-yam_qtl$Marker_short <- sub("_[ACGT]$", "", yam_qtl$Marker)
-head(yam_qtl)
-```
-
-### Phenotypes
-
-We can read in phenotype data so that we can see how well SNPs predict phenotypes.
-
-```{r importpheno}
-pheno <- read.csv("data/pheno_data all 174.csv")
-head(pheno)
-```
-
-The column names should be made to match the QTL spreadsheet.
-
-```{r matchtraits}
-traits <- unique(yam_qtl$Trait)
-names(pheno)
-
-names(pheno) <- gsub("_201[78]", "", names(pheno))
-names(pheno) <- gsub("_", " ", names(pheno))
-names(pheno)
-
-setdiff(traits, names(pheno)) # traits from the QTL file that haven't been matched in the phenotype file
-setdiff(names(pheno), traits) # traits from the phenotype file that haven't been matched in the QTL file
-
-names(pheno)[names(pheno) == "Spines on tuber"] <- "Spines on tuber surface"
-names(pheno)[names(pheno) == "No of tubers"] <- "Number of tubers per plant"
-names(pheno)[names(pheno) == "Yield plant"] <- "Yield per plant"
-
-all(traits %in% names(pheno)) # should be TRUE
-```
-
-### Genotypes and annotations from VCF
-
-We will specify ranges in which we wish to look at SNPs for KASP marker design.
-Let's look within 100 kb of each significant SNP.
-
-```{r qtlranges}
-
-```
-
-We will import numeric genotypes just within these ranges.
-
-```{r numgen}
-numgen <- getNumGeno(bg, ranges = qtl_ranges)
-str(numgen)
-```
-
-There are 5684 markers across 173 individuals, and genotypes are coded from
-zero to two.  We will change the accession names to match the phenotype spreadsheet.
-
-```{r matchaccessions}
-if(all(sub("_", "", colnames(numgen)) %in% pheno$DRS)){
-  colnames(numgen) <- sub("_", "", colnames(numgen))
+```{r warning = FALSE}
+maize_qtl$Public <- FALSE
+maize_qtl$Public_name <- ""
+for(i in seq_len(nrow(maize_qtl))){
+  chrom <- as.integer(sub("Chr", "", maize_qtl$Final_chrom[i]))
+  if(is.na(chrom)) next # one marker not on chromosome
+  pos <- maize_qtl$Final_pos[i]
+  maize_qtl$Public[i] <- pos %in% start(vcflist[[chrom]])
+  if(maize_qtl$Public[i]){
+    maize_qtl$Public_name[i] <- names(vcflist[[chrom]])[match(pos, start(vcflist[[chrom]]))]
+  }
 }
 
-all(colnames(numgen) %in% pheno$DRS) # should be TRUE
+mean(maize_qtl$Public, na.rm = TRUE)
 ```
 
-We will also import SNP metadata within these ranges.
+Only about 70% of these are in the public VCF.  Therefore, we'll rely on the
+spreadsheet for information about target SNPs, and just use the public VCF
+to discover flanking SNPs.
 
-```{r importvcf}
-myvcf <- readVcf(bg,
-                 param = ScanVcfParam(geno = NA, which = qtl_ranges))
+We'll convert the public VCF data from two lists into a single
+`GRanges` object and a single matrix.
 
-rowRanges(myvcf)
-```
-
-We can see that the `paramRangeID` column indicates which original marker each
-SNP is near.  Since there were some significant SNPs close to each other, that
-also means we have some duplicates in both `numgen` and `myvcf`.
-
-```{r dupcheck}
-identical(rownames(numgen), names(rowRanges(myvcf)))
-
-as.logical(anyDuplicated(rownames(numgen)))
-```
-
-### Unfiltered VCF
-
-In this case we had a much larger VCF with rarer SNPs, so we will import that too.
-
-```{r imporvcf2}
-bigvcf <- readRDS(rds)
-
-rowRanges(bigvcf)
-```
-
-Since we have quality scores, we will look at the distribution.
-
-```{r qualhist}
-hist(rowRanges(bigvcf)$QUAL, xlab = "Quality score",
-     main = "Histogram of quality scores in large VCF")
-```
-
-This suggests filtering to only keep the highest scores is advisable.
-We will also make sure to keep any SNPs that were in our smaller VCF.
-
-```{r filtervcf}
-temp <- paste(seqnames(bigvcf), start(bigvcf), sep = "_")
-
-bigvcf <- bigvcf[rowRanges(bigvcf)$QUAL > 900 | 
-                temp %in% names(myvcf),]
+```{r warning = FALSE}
+temp <- do.call(c, lapply(vcflist, rowRanges))
+vcf_ranges <- rowRanges_correctedSeqnames(temp,
+                                          fixfn = function(x) paste0("Chr", x))
 rm(temp)
+
+vcf_numgen <- do.call(rbind, numgenlist)
+rm(numgenlist)
 ```
 
-Lastly, we will filter the VCF to only contain SNPs in our QTL ranges.
+We'll look at the distribution of allele frequencies to see if we want to
+filter some markers.
 
-```{r subsetvcf}
-bigvcf <- subsetByOverlaps(bigvcf, qtl_ranges)
+```{r}
+vcf_alfreq <- rowMeans(vcf_numgen, na.rm = TRUE) / 2
+hist(vcf_alfreq)
+
+mean(vcf_alfreq > 0.01)
+```
+
+Only annotating SNPs found in greater than 1% of accessions seems reasonable;
+these are the ones most likely to influence assay efficacy.
+
+```{r}
+vcf_ranges_filt <- vcf_ranges[vcf_alfreq > 0.01]
 ```
 
 ## Technical parameters for marker design from significant SNPs
@@ -654,17 +485,30 @@ however.
 
 ### GC content
 
-PCR will work best when GC content is 40-60%.
+PCR will work best when GC content is 40-60%.  We will first extract the
+flanking sequence needed for marker design.
+
+```{r qtlkaspseq}
+qtl_kasp_ranges <- getKaspRange(GRanges(maize_qtl$Final_chrom,
+                                        IRanges(start = maize_qtl$Final_pos,
+                                                width = 1L)))
+qtl_kasp_seq <- scanFa(refgenome, qtl_kasp_ranges)
+```
+
+Then we'll determine GC content.
 
 ```{r gccontent}
-yam_qtl$GCcontent <- gcContent(myvcf, yam_qtl$Marker_short, refgenome)
+temp <- letterFrequency(qtl_kasp_seq, c("ATW", "GCS"))
+maize_qtl$GCcontent <- temp[,2] / rowSums(temp)
+```
 
-hist(yam_qtl$GCcontent, xlab = "GC content",
+
+```{r gccontenthist}
+hist(maize_qtl$GCcontent, xlab = "GC content",
      main = "GC content flanking significant SNPs", breaks = 20)
 ```
 
-Many are below the desired range, so we may see if there are any nearby
-SNPs in LD that have better GC content.
+Many are below the desired range, but not by much.
 
 ### Number of flanking SNPs
 
@@ -672,136 +516,150 @@ A few flanking SNPs are okay, but we want to make sure none of these
 have an excessive amount.
 
 ```{r flankingsnps}
-yam_qtl$Nflanking <- nFlankingSNPs(bigvcf, yam_qtl$Marker_short)
+temp1 <- findOverlaps(narrow(qtl_kasp_ranges, start = 1, width = 50),
+                      vcf_ranges_filt, type = "any")
+nhits1 <- countLnodeHits(temp1)
+temp2 <- findOverlaps(narrow(qtl_kasp_ranges, start = 52, width = 50),
+                      vcf_ranges_filt, type = "any")
+nhits2 <- countLnodeHits(temp2)
+maize_qtl$Nflanking <- nhits1 + nhits2
 
-hist(yam_qtl$Nflanking, xlab = "Number of flanking SNPs",
+hist(maize_qtl$Nflanking, xlab = "Number of flanking SNPs",
      main = "Number of flanking SNPs within 50 bp of significant SNPs")
-table(yam_qtl$Nflanking)
+table(maize_qtl$Nflanking)
 ```
 
 For those with three or more, we might see if there are better markers.
 
 ## Evaluating nearby markers
 
-### Finding markers in linkage disequilibrium (LD)
+For which markers do we want to search for substitutes?
 
-Below is a function that uses that information to estimate LD of every SNP
-within range with the significant SNP.  We will reorder the results to match
-the table of significant SNPs.
-
-```{r ld}
-ld <- LD(numgen, myvcf)
-ld <- ld[yam_qtl$Marker_short]
+```{r}
+to_sub <- which(maize_qtl$Public & 
+                  (maize_qtl$Nflanking > 2 | maize_qtl$GC < 0.35 | maize_qtl$GCcontent > 0.65))
+maize_qtl[to_sub,c("QTL.marker", "Final_pos", "Final_chrom", "GCcontent", "Nflanking")]
 ```
 
-Let's also extract start positions for the sake of plotting.
+We'll find markers in linkage disequilibrium with our targets and
+calculate GC content and number of flanking SNPs.
 
-```{r grangeslist}
-snplist <- split(rowRanges(myvcf), rowRanges(myvcf)$paramRangeID)
-snplist <- snplist[yam_qtl$Marker_short]
-positions <- start(snplist)
-```
+```{r eval = FALSE}
+candidate_list <- vector(mode = "list", length = length(to_sub))
+names(candidate_list) <- maize_qtl$QTL.marker[to_sub]
 
-```{r plotld}
-i <- 1
-ggplot(mapping = aes(x = positions[[i]], y = ld[[i]])) +
-  geom_point(alpha = 0.3) +
-  labs(x = "Position", y = "R-squared",
-       title = paste("Linkage disequilibrium with", names(snplist)[i]))
-```
-
-The actual SNP of interest shows up as 100% LD in the middle of the range.  There
-are a few nearby around 50% LD, which is not great but we might consider those if
-the SNP of interest is in a very low GC region, for example.
-
-### Finding markers correlating with the trait
-
-For all markers nearby to our significant SNPs, let's also look at the R-squared
-with the corresponding trait.
-
-```{r rsq, warning = FALSE}
-phen_rsq <- phenoCorr(numgen, myvcf, yam_qtl$Marker_short, yam_qtl$Trait,
-                      pheno) ^ 2
-phen_rsq <- phen_rsq[yam_qtl$Marker_short]
-```
-
-```{r plotrsq}
-ggplot(mapping = aes(x = positions[[i]], y = phen_rsq[[i]],
-                     color = ld[[i]])) +
-  geom_point(alpha = 0.7) +
-  labs(x = "Position", y = "R-squared",
-       title = paste("Association with", yam_qtl$Trait[i]),
-       color = "LD with hit") +
-  scale_color_viridis()
-```
-
-## Choosing markers to output
-
-We may want to output a table of the best markers, along with some statistics so that
-we can manually choose among them.  Let's take the top ten R-squared values for
-association with the trait of interest, and also make sure to get the significant
-SNP itself.
-
-```{r top10}
-n <- 10 # edit this number if you want to keep a different number of markers
-
-top10 <- lapply(phen_rsq, function(x){
-  x1 <- sort(x, decreasing = TRUE)
-  if(length(x1) > n){
-    x1 <- x1[1:n]
+for(i in seq_along(to_sub)){
+  thisrow <- to_sub[i]
+  pubname <- maize_qtl$Public_name[thisrow]
+  origname <- maize_qtl$QTL.marker[thisrow]
+  message(origname)
+  nearby_markers <- names(vcf_ranges)[vcf_ranges$paramRangeID == origname]
+  nearby_markers <- setdiff(nearby_markers, pubname)
+  
+  thisgeno <- vcf_numgen[pubname,]
+  
+  tempmarkers <- character(0)
+  templd <- numeric(0)
+  tempgc <- numeric(0)
+  tempflank <- integer(0)
+  
+  for(m in nearby_markers){
+    #if(sd(vcf_numgen[m,], na.rm = TRUE) == 0) next
+    thisld <- cor(thisgeno, vcf_numgen[m,], use = "complete.obs", method = "pearson") ^ 2
+    if(is.na(thisld) || thisld < 0.9) next # don't investigate marker unless very high LD to target
+    tempmarkers <- c(tempmarkers, m)
+    templd <- c(templd, thisld)
   }
-  return(names(x1))
-} )
-
-top10tab <- utils::stack(top10)
-colnames(top10tab) <- c("SNP_ID", "QTL")
-
-# Add in any QTL that weren't in top 10 associated SNPs
-toadd <- setdiff(yam_qtl$Marker_short, top10tab$SNP_ID)
-top10tab <- rbind(top10tab,
-                  data.frame(SNP_ID = toadd, QTL = toadd))
-top10tab <- top10tab[order(factor(top10tab$QTL, levels = yam_qtl$Marker_short)),]
-```
-
-Now we'll get the KASP-formatted sequence for these markers.
-
-```{r formatkasp}
-outtab <- formatKasp(bigvcf, top10tab$SNP_ID, refgenome)
-outtab <- cbind(outtab, top10tab[,"QTL", drop = FALSE])
-```
-
-We'll add in linkage disequilibrium and trait association data, and also mark
-which allele was positively associated with the trait.
-
-```{r ldrsq, warning = FALSE}
-extr <- function(x, y, lst){
-  return(lst[[x]][y])
+  if(length(tempmarkers) > 0){
+    # Get GC content and number of flanking SNPs
+    this_kasp_range <- getKaspRange(vcf_ranges[tempmarkers])
+    this_seq <- scanFa(refgenome, this_kasp_range)
+    temp <- letterFrequency(this_seq, c("ATW", "GCS"))
+    tempgc <- temp[,2] / rowSums(temp)
+    
+    fo <- GenomicRanges::findOverlaps(this_kasp_range, vcf_ranges_filt, type = "any")
+    tempflank <- S4Vectors::countLnodeHits(fo) - 1L
+  }
+  
+  candidate_list[[i]] <- data.frame(Marker = tempmarkers,
+                                    LD = templd,
+                                    GCcontent = tempgc,
+                                    Nflanking = tempflank)
 }
-outtab$LD_with_QTL <- mapply(extr, outtab$QTL, outtab$SNP_ID, MoreArgs = list(ld))
-outtab$R2_with_trait <- mapply(extr, outtab$QTL, outtab$SNP_ID, MoreArgs = list(phen_rsq))
 
-als <- whichAlleleList(numgen, myvcf, yam_qtl$Marker_short, yam_qtl$Trait,
-                       pheno)
-als <- als[yam_qtl$Marker_short]
-outtab$Pos_allele <- mapply(function(x, y, ...) as.character(extr(x, y, ...)),
-                            outtab$QTL, outtab$SNP_ID, MoreArgs = list(als))
+save(candidate_list, file = "results/candidate_list_maize.RData")
 ```
 
-We will also add the GC content and number of flanking SNPs.
-
-```{r gcouttab}
-outtab$GC_content <- gcContent(myvcf, outtab$SNP_ID, refgenome)
-outtab$N_flanking <- nFlankingSNPs(bigvcf, outtab$SNP_ID)
-
-head(outtab)
+```{r}
+load("results/candidate_list_maize.RData")
+sapply(candidate_list, nrow)
+candidate_list <- candidate_list[sapply(candidate_list, nrow) > 0]
+names(candidate_list)
 ```
 
-Now we have a data frame that we can export to a spreadsheet, and we can
-manually select SNPs for development as KASP markers.  I recommend selecting
-the SNP matching the QTL, plus one or two more SNPs that are similarly
-associated with the trait and have as close to optimal GC content as possible.
+From the markers that were identified to be in LD, we will choose some good
+alternatives.
 
-```{r export}
-write.csv(outtab, file = "results/mas_markers.csv", row.names = FALSE)
+```{r results = "hide"}
+betterMarker <- function(m, tab = maize_qtl, lst = candidate_list, rng = vcf_ranges){
+  row <- match(m, tab$QTL.marker)
+  gc <-tab$GCcontent[row]
+  nflank <- tab$Nflanking[row]
+  pos <- tab$Final_pos[row]
+  
+  cand <- lst[[m]]
+  # only look at markers that are an improvement on GC and # snps
+  cand <- cand[abs(0.5 - cand$GCcontent) <= abs(0.5 - gc),]
+  cand <- cand[cand$Nflanking <= nflank,]
+  # if any have ideal characteristics, subset to those
+  if(any(cand$Nflanking < 3 & cand$GCcontent > 0.4 & cand$GCcontent < 0.6)){
+    cand <- cand[cand$Nflanking < 3 & cand$GCcontent > 0.4 & cand$GCcontent < 0.6,]
+  }
+  #if(nrow(cand == 0)) return(NA_character_)
+  # find the physically closest marker
+  cand$Pos <- start(rng[cand$Marker])
+  cand$Dist <- abs(cand$Pos - pos)
+  return(cand)
+}
+
+betterMarker("S10_16561261")  # use 10-16329120
+betterMarker("S10_112661493") # use 10-111797724
+betterMarker("S3_143135226")  # use 3-142270994
+betterMarker("S1_102219796")  # keep original
+betterMarker("S3_168085123")  # keep original
+betterMarker("S3_144672580")  # keep original
+betterMarker("S1_219230116")  # use 1-216107167
+betterMarker("S1_17612352")   # use 1-17281449
+betterMarker("S5_203246920")  # use 5-198031485
+betterMarker("S7_158457623")  # use 7-153071765
+betterMarker("S9_136694198")  # keep original
+betterMarker("S2_229069973")  # use 2-222755051
+betterMarker("S1_51819212")   # keep original
+betterMarker("S5_77117962")   # keep original
+
+maize_qtl$Alt_marker <- NA_character_
+maize_qtl$Alt_marker[match(c("S10_16561261", "S10_112661493", "S3_143135226", "S1_219230116", "S1_17612352", "S5_203246920", "S7_158457623", "S2_229069973"),
+                           maize_qtl$QTL.marker)] <-
+                           c( "10-16329120",  "10-111797724",  "3-142270994",  "1-216107167",  "1-17281449",  "5-198031485",  "7-153071765",  "2-222755051")
+altrows <- which(!is.na(maize_qtl$Alt_marker))
+maize_qtl$Alt_pos[altrows] <- start(vcf_ranges[maize_qtl$Alt_marker[altrows]])
+maize_qtl$Alt_GCcontent <- NA_real_
+maize_qtl$Alt_Nflanking <- NA_integer_
+maize_qtl$Alt_GCcontent[altrows] <-
+  sapply(altrows,
+         function(x){
+           cand <- candidate_list[[maize_qtl$QTL.marker[x]]]
+           cand$GCcontent[match(maize_qtl$Alt_marker[x], cand$Marker)]
+         })
+maize_qtl$Alt_Nflanking[altrows] <-
+  sapply(altrows,
+         function(x){
+           cand <- candidate_list[[maize_qtl$QTL.marker[x]]]
+           cand$Nflanking[match(maize_qtl$Alt_marker[x], cand$Marker)]
+         })
 ```
+
+## Formatting sequences for KASP
+
+
 
