@@ -394,7 +394,7 @@ writeVcf(subvcf, filename = "results/marker_subset.vcf")
 ```
 
 Now, on Galaxy, use the [Purity
-tool](http://galaxy-demo.excellenceinbreeding.org/root?tool_id=purity_beta)
+tool](http://cropgalaxy.excellenceinbreeding.org/root?tool_id=purity_beta)
 on that VCF file. I set it to select 50 markers after considering 10,000
 solutions, and left the distance cutoff at 0.05. Two files were output,
 and I downloaded the first to my `results` folder. Below I will import
